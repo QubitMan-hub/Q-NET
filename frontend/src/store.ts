@@ -6,7 +6,7 @@ import type { Issue, Project, Selection, SimState } from "./types";
 export type CanvasView = "network" | "automaton" | "spacetime";
 export type DockTab = "events" | "timeline" | "console" | "experiments" | "validation" | "decision";
 
-export interface ConsoleEntry { kind: "cmd" | "ok" | "err" | "info"; text: string }
+export interface ConsoleEntry { id: number; cmd: string; status: "running" | "ok" | "error"; text: string; data?: any }
 
 interface Store {
   meta: any | null;
@@ -43,6 +43,7 @@ interface Store {
   runUntil(ns: number): Promise<void>;
   setPlaying(on: boolean): void;
   consoleExec(line: string): Promise<void>;
+  clearConsole(): void;
   select(sel: Selection): void;
   setView(v: CanvasView): void;
   setFocus(id: string | null): void;
@@ -239,22 +240,28 @@ export const useStore = create<Store>((set, get) => {
     },
 
     async consoleExec(line) {
-      const log = get().consoleLog;
-      set({ consoleLog: [...log, { kind: "cmd", text: line }] });
-      await guard(async () => {
+      const id = Date.now() + Math.random();
+      const patch = (e: Partial<ConsoleEntry>) =>
+        set({ consoleLog: get().consoleLog.map((x) => (x.id === id ? { ...x, ...e } : x)) });
+      set({ consoleLog: [...get().consoleLog.slice(-199), { id, cmd: line, status: "running", text: "" }] });
+      try {
         if (get().dirtyPush) await pushNow();
         const since = get().sim?.trace.length ?? 0;
         const rev = get().revision;
         const r = await api.console(line, since);
-        set({ consoleLog: [...get().consoleLog, { kind: r.result.ok ? "ok" : "err", text: r.result.output || (r.result.ok ? "ok" : "failed") }] });
+        patch({ status: r.result.ok ? "ok" : "error", text: r.result.output || (r.result.ok ? "Done." : "That did not work."), data: r.result.data });
         if (r.state.revision !== rev) {
           applyProject(await api.project());
           await get().refreshSim(true);
         } else {
           await mergeSim(r.state, since);
         }
-      });
+      } catch (e: any) {
+        patch({ status: "error", text: `The engine could not be reached: ${e?.message ?? e}` });
+      }
     },
+
+    clearConsole() { set({ consoleLog: [] }); },
 
     select(sel) {
       set({ selection: sel });

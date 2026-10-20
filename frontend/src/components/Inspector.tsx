@@ -205,7 +205,7 @@ function ParticipantInspector({ p, project }: { p: ParticipantSpec; project: Pro
       <Section title="Local noise">
         {(["measurement_flip", "gate_depolarizing", "memory_t1_ns", "memory_t2_ns"] as const).map((k) => (
           <Field key={k} label={k.replace(/_/g, " ")}>
-            <NumberInput value={p.noise[k] ?? null} allowNull min={0} onCommit={(v) => upd((q) => { if (v === null) delete q.noise[k]; else q.noise[k] = v; })} />
+            <NumberInput value={p.noise[k] ?? null} allowNull nullLabel="off" min={0} onCommit={(v) => upd((q) => { if (v === null) delete q.noise[k]; else q.noise[k] = v; })} />
           </Field>
         ))}
       </Section>
@@ -276,8 +276,8 @@ function LinkInspector({ id, project }: { id: string; project: Project }) {
           {summary.distance_m.toPrecision(7)} m at {summary.speed_mps} m/s → {nsLabel(summary.propagation_fs)}
           {summary.latency_fs > 0 && <> + latency {nsLabel(summary.latency_fs)}</>} = <b>{nsLabel(summary.delay_fs)}</b>
         </div>}
-        <Field label="Length (m)" title="Empty = straight-line distance between the endpoints"><NumberInput value={l.length_m} allowNull min={0} onCommit={(v) => upd((x) => { x.length_m = v; })} /></Field>
-        <Field label="Speed (m/s)" title="Empty = project signal speed"><NumberInput value={l.speed_mps} allowNull min={0} onCommit={(v) => upd((x) => { x.speed_mps = v; })} /></Field>
+        <Field label="Length (m)" title="Empty = straight-line distance between the endpoints"><NumberInput value={l.length_m} allowNull nullLabel="straight line" min={0} onCommit={(v) => upd((x) => { x.length_m = v; })} /></Field>
+        <Field label="Speed (m/s)" title="Empty = project signal speed"><NumberInput value={l.speed_mps} allowNull nullLabel="project speed" min={0} onCommit={(v) => upd((x) => { x.speed_mps = v; })} /></Field>
         <Field label="Latency (ns)"><NumberInput value={l.latency_ns} min={0} step={0.1} onCommit={(v) => upd((x) => { x.latency_ns = v ?? 0; })} /></Field>
         <Field label="Jitter (ns)"><NumberInput value={l.jitter_ns} min={0} step={0.1} onCommit={(v) => upd((x) => { x.jitter_ns = v ?? 0; })} /></Field>
       </Section>
@@ -286,7 +286,7 @@ function LinkInspector({ id, project }: { id: string; project: Project }) {
         <Field label="Attenuation (dB/km)"><NumberInput value={l.attenuation_db_per_km} min={0} step={0.1} onCommit={(v) => upd((x) => { x.attenuation_db_per_km = v ?? 0; })} /></Field>
         {l.kind === "quantum" && (["depolarizing", "dephasing", "bitflip", "amplitude_damping"] as const).map((k) => (
           <Field key={k} label={k.replace("_", " ")}>
-            <NumberInput value={l.noise[k] ?? null} allowNull min={0} max={1} step={0.05} onCommit={(v) => upd((x) => { if (v === null) delete x.noise[k]; else x.noise[k] = v; })} />
+            <NumberInput value={l.noise[k] ?? null} allowNull nullLabel="off" min={0} max={1} step={0.05} onCommit={(v) => upd((x) => { if (v === null) delete x.noise[k]; else x.noise[k] = v; })} />
           </Field>
         ))}
       </Section>
@@ -355,9 +355,9 @@ function ActionEditor({ a, onChange, onRemove, onMove }: { a: Action; onChange: 
           <Select value={a.op} options={Object.keys(OPS_FIELDS)} onChange={(op) => onChange({ op })} />
         </div>
         <span className="grow" />
-        <button className="btn ghost" title="Move up" onClick={() => onMove(-1)}>↑</button>
-        <button className="btn ghost" title="Move down" onClick={() => onMove(1)}>↓</button>
-        <button className="btn ghost danger" title="Remove" onClick={onRemove}><Icon.trash /></button>
+        <button className="btn ghost" title="Move up" aria-label="Move action up" onClick={() => onMove(-1)}><Icon.up /></button>
+        <button className="btn ghost" title="Move down" aria-label="Move action down" onClick={() => onMove(1)}><Icon.down /></button>
+        <button className="btn ghost danger" title="Remove" aria-label="Remove action" onClick={onRemove}><Icon.trash /></button>
       </div>
       {fields.map((f) => {
         const v = a[f];
@@ -455,7 +455,9 @@ function TransitionInspector({ automaton, id, project }: { automaton: string; id
             <div><b>{r.node}</b> at <span className="mono">{nsLabel(r.time_fs)}</span> (local {nsLabel(r.data.local_time_fs)})</div>
             <div>{r.explain}</div>
             {(r.data.evaluations ?? []).map((e: any, i: number) => (
-              <div key={i} className="mono xs">{e.result ? "✓" : "✗"} {e.transition}: {typeof e.guard === "string" ? e.guard : "true"}</div>
+              <div key={i} className="mono xs row" style={{ gap: 4 }}>
+                <span className={e.result ? "cx-ok" : "cx-err"} style={{ width: 12, display: "inline-flex" }}>{e.result ? <Icon.check /> : <Icon.cross />}</span>
+                {e.transition}: {typeof e.guard === "string" ? e.guard : "true"} <span className="muted">({e.result ? "true" : "false"})</span></div>
             ))}
             {(r.data.actions ?? []).map((ac: any, i: number) => <div key={`a${i}`} className="mono xs muted">{short(ac, 110)}</div>)}
           </div>

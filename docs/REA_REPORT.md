@@ -185,7 +185,7 @@ None of the surveyed tools provide the following as first-class features. Some c
 
 > **Implementation note (added after the build).** This subsection records the design as
 > proposed before implementation. What was built is described in
-> [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md). Deviations:
+> [`ARCHITECTURE.md`](ARCHITECTURE.md). Deviations:
 > - The modules are `kernel`, `quantum`, `protocol` (DSL, expressions, capabilities, project
 >   format), `engine`, `decision`, `invariants`, `experiments`, `session`, `console` and `server`.
 >   There are no separate `geometry`, `dsl`, `adversary` or `trace` packages.

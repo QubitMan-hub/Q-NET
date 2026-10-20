@@ -41,6 +41,20 @@ class Command:
     help: str
     fn: Callable[..., Tuple[str, Any]]
     aliases: List[str] = field(default_factory=list)
+    category: str = "Other"
+
+
+# Task-oriented groups shown by `help` and the UI's command guide, in display order.
+CATEGORIES = {
+    "Run the simulation": ["run", "step", "advance", "reset", "time", "queue"],
+    "Understand the result": ["decision", "chain", "events", "event", "messages", "invariants"],
+    "Look at participants": ["participants", "node", "fsm", "links"],
+    "Change the setup": ["set", "get", "strategy", "caps", "validate", "info"],
+    "Experiments": ["batch", "experiment"],
+    "Files": ["examples", "load", "save", "export", "checkpoint", "restore"],
+    "Scripting": ["assert", "help"],
+}
+_CATEGORY_OF = {name: cat for cat, names in CATEGORIES.items() for name in names}
 
 
 def _value(s: str) -> Any:
@@ -71,12 +85,22 @@ class Console:
     # ------------------------------------------------------------ registry
     def _cmd(self, name, usage, help_, aliases=()):
         def deco(fn):
-            c = Command(name, usage, help_, fn, list(aliases))
+            c = Command(name, usage, help_, fn, list(aliases), _CATEGORY_OF.get(name, "Other"))
             self.commands[name] = c
             for a in aliases:
                 self.commands[a] = c
             return fn
         return deco
+
+    def catalog(self) -> List[Dict[str, Any]]:
+        """Commands grouped by task, for help screens and the UI's command guide."""
+        seen = {}
+        for c in self.commands.values():
+            seen[c.name] = c
+        order = [n for names in CATEGORIES.values() for n in names]
+        cmds = sorted(seen.values(), key=lambda c: order.index(c.name) if c.name in order else 999)
+        return [{"name": c.name, "usage": c.usage, "help": c.help, "aliases": c.aliases, "category": c.category}
+                for c in cmds]
 
     def complete(self, prefix: str) -> List[str]:
         parts = prefix.split()
@@ -101,17 +125,17 @@ class Console:
         cmd = self.commands.get(name)
         if cmd is None:
             near = [c for c in sorted({c.name for c in self.commands.values()}) if c.startswith(name[:2])]
-            hint = f" Did you mean: {', '.join(near)}?" if near else " Type 'help'."
-            return ConsoleResult(False, f"unknown command '{name}'.{hint}", None, line)
+            hint = f" Did you mean {' or '.join(near[:3])}?" if near else ""
+            return ConsoleResult(False, f"unknown command '{name}'.{hint} Type 'help' to see what you can do.", None, line)
         pos, kw = _split(args)
         try:
             out, data = cmd.fn(*pos, **kw)
             return ConsoleResult(True, out, data, line)
-        except TypeError as exc:
-            return ConsoleResult(False, f"usage: {cmd.usage}\n({exc})", None, line)
+        except TypeError:
+            return ConsoleResult(False, f"'{cmd.name}' needs different arguments.\nusage: {cmd.usage}\n{cmd.help}", None, line)
         except (SessionError, KeyError, ValueError, RuntimeError) as exc:
             msg = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
-            return ConsoleResult(False, f"error: {msg}", None, line)
+            return ConsoleResult(False, f"{msg}", None, line)
 
     # ------------------------------------------------------------ commands
     def _register(self):
@@ -120,36 +144,37 @@ class Console:
         def sim():
             return S.require_sim()
 
-        @self._cmd("help", "help [command]", "List commands or show help for one.", ["?"])
+        @self._cmd("help", "help [command]", "Show this list, or details for one command.", ["?"])
         def _help(name=None):
             if name:
                 c = self.commands.get(name)
                 if not c:
                     raise SessionError(f"no command {name!r}")
                 return f"{c.usage}\n  {c.help}", None
-            seen, lines = set(), []
-            for c in self.commands.values():
-                if c.name in seen:
-                    continue
-                seen.add(c.name)
-                lines.append(f"  {c.usage:<44} {c.help}")
-            return "Commands (times in ns):\n" + "\n".join(lines), None
+            lines = ["Commands by task (times are in nanoseconds). Type 'help <command>' for details.", ""]
+            current = None
+            for c in self.catalog():
+                if c["category"] != current:
+                    current = c["category"]
+                    lines.append(current)
+                lines.append(f"  {c['usage']:<46} {c['help']}")
+            return "\n".join(lines), self.catalog()
 
-        @self._cmd("examples", "examples", "List bundled example projects.")
+        @self._cmd("examples", "examples", "Bundled example scenarios you can load.")
         def _examples():
             return "\n".join(f"  {n}" for n in EXAMPLES), sorted(EXAMPLES)
 
-        @self._cmd("load", "load <path> | load example <name>", "Load a project and reset the simulation.")
+        @self._cmd("load", "load <path> | load example <name>", "Open a project file or a bundled example.")
         def _load(a, b=None):
             src = f"example:{b}" if a == "example" else a
             doc = S.load(src)
             return f"loaded '{doc['meta']['name']}'" + (f"\n{S.sim_error}" if S.sim_error else ""), None
 
-        @self._cmd("save", "save [path]", "Save the project (JSON).")
+        @self._cmd("save", "save [path]", "Save the project file.")
         def _save(path=None):
             return f"saved to {S.save(path)}", None
 
-        @self._cmd("info", "info", "Project summary, assumptions and limitations.", ["project"])
+        @self._cmd("info", "info", "What this project models, its assumptions and limits.", ["project"])
         def _info():
             p = S.project
             m = p["meta"]
@@ -160,14 +185,14 @@ class Console:
             lines += ["limitations:"] + [f"  - {a}" for a in m.get("limitations", [])]
             return "\n".join(lines), m
 
-        @self._cmd("validate", "validate", "Validate the project; report errors and warnings.")
+        @self._cmd("validate", "validate", "Check the project for mistakes before running.")
         def _validate():
             iss = S.validate()
             if not iss:
                 return "project is valid (no errors or warnings)", iss
             return "\n".join(f"  [{i['level']}] {i['path']}: {i['message']}" for i in iss), iss
 
-        @self._cmd("participants", "participants", "List participants with state and position.", ["nodes", "ls"])
+        @self._cmd("participants", "participants", "Everyone in the protocol, where they are and what state they are in.", ["nodes", "ls"])
         def _nodes():
             s = sim()
             rows = []
@@ -177,7 +202,7 @@ class Console:
                             f" outcome={n.outcome} caps={n.caps.profile}")
             return "\n".join(rows), [s.node_snapshot(n) for n in s.nodes.values()]
 
-        @self._cmd("node", "node <id>", "Show a participant's full runtime state.")
+        @self._cmd("node", "node <id>", "Everything one participant knows and holds right now.")
         def _node(nid):
             s = sim()
             if nid not in s.nodes:
@@ -193,7 +218,7 @@ class Console:
                 lines.append(f"  ERROR: {snap['error']}")
             return "\n".join(lines), snap
 
-        @self._cmd("fsm", "fsm <id>", "Show a participant's automaton and transition history.")
+        @self._cmd("fsm", "fsm <id>", "A participant's state machine and the steps it has taken.")
         def _fsm(nid):
             s = sim()
             n = s.nodes.get(nid)
@@ -213,7 +238,7 @@ class Console:
                              f"{h['from']} -> {h['to']}")
             return "\n".join(lines), {"spec": n.automaton.spec, "history": n.history, "state": n.state}
 
-        @self._cmd("links", "links", "List links with lengths and delays.")
+        @self._cmd("links", "links", "Channels between participants, with length and delay.")
         def _links():
             s = sim()
             rows, seen = [], set()
@@ -224,21 +249,21 @@ class Console:
                 seen.add(lid)
             return "\n".join(rows), [l for l in S.project["links"]]
 
-        @self._cmd("queue", "queue [n]", "Show pending events in execution order.", ["pending"])
+        @self._cmd("queue", "queue [n]", "What will happen next, in order.", ["pending"])
         def _queue(n="20"):
             evs = sim().scheduler.pending()[: int(n)]
             rows = [f"  #{e.id:<4} {tu.fmt(e.time):>16} p{e.priority:<3} {e.kind:<20} {e.node or '':<6} {e.label}"
                     for e in evs]
             return ("\n".join(rows) or "  (no pending events)"), [e.summary() for e in evs]
 
-        @self._cmd("reset", "reset [seed]", "Rebuild the simulation from the project (optionally with a seed).")
+        @self._cmd("reset", "reset [seed]", "Start the run over (optionally with a different random seed).")
         def _reset(seed=None):
             s = S.reset(None if seed is None else int(seed))
             if s is None:
                 raise SessionError(S.sim_error or "reset failed")
             return f"reset; seed {s.seed}; {len(s.scheduler)} pending events", None
 
-        @self._cmd("step", "step [n]", "Execute the next n events (default 1).")
+        @self._cmd("step", "step [n]", "Do the next event (or the next n).")
         def _step(n="1"):
             before = len(sim().trace)
             k = S.step(int(n))
@@ -248,25 +273,25 @@ class Console:
             return f"executed {k} event(s); now {tu.fmt(sim().now)}\n" + "\n".join(lines) + tail, \
                 [r.as_dict() for r in new]
 
-        @self._cmd("run", "run [until=<t_ns>] [steps=<n>]", "Run to completion, to a time, or for n events.")
+        @self._cmd("run", "run [until=<t_ns>] [steps=<n>]", "Run to the end, or until a given time.")
         def _run(until=None, steps=None):
             s = S.run(None if until is None else float(until), None if steps is None else int(steps))
             return (f"now {tu.fmt(s.now)}; {s.scheduler.executed_count} events executed; "
                     f"{'stopped: ' + s.stop_reason if s.stopped else 'paused'}"), None
 
-        @self._cmd("advance", "advance <dt_ns>", "Advance simulation time by an interval.")
+        @self._cmd("advance", "advance <dt_ns>", "Move time forward by an interval.")
         def _advance(dt):
             s = S.advance(float(dt))
             return f"now {tu.fmt(s.now)}" + (f" (stopped: {s.stop_reason})" if s.stopped else ""), None
 
-        @self._cmd("time", "time", "Current global and local clock readings.", ["now"])
+        @self._cmd("time", "time", "The simulation clock and each participant's own clock.", ["now"])
         def _time():
             s = sim()
             lines = [f"global {tu.fmt(s.now)} ({s.now} fs)"]
             lines += [f"  {n.id:<6} local {tu.fmt(n.local(s.now))}  [{n.clock.describe()}]" for n in s.nodes.values()]
             return "\n".join(lines), {"now_fs": s.now}
 
-        @self._cmd("events", "events [node=<id>] [kind=<k>] [grep=<text>] [last=<n>]", "Search the event trace.",
+        @self._cmd("events", "events [node=<id>] [kind=<k>] [grep=<text>] [last=<n>]", "Search what has happened so far.",
                    ["trace", "log"])
         def _events(node=None, kind=None, grep=None, last="40"):
             recs = [r for r in sim().trace
@@ -276,12 +301,12 @@ class Console:
             lines = [f"  [{r.seq:>4}] {tu.fmt(r.time):>16} {r.kind:<20} {r.node or '':<6} {r.explain}" for r in recs]
             return ("\n".join(lines) or "  (no matching records)"), [r.as_dict() for r in recs]
 
-        @self._cmd("event", "event <seq>", "Show one trace record in full.")
+        @self._cmd("event", "event <seq>", "Full detail of one event.")
         def _event(seq):
             r = sim().trace[int(seq)]
             return json.dumps(r.as_dict(), indent=2, default=str), r.as_dict()
 
-        @self._cmd("messages", "messages [node]", "List messages (sent/received by a node).", ["msgs"])
+        @self._cmd("messages", "messages [node]", "Messages sent so far, with send and arrival times.", ["msgs"])
         def _messages(node=None):
             ms = [m for m in sim().messages.values() if node is None or node in (m.src, m.dst)]
             lines = [f"  m{m.id:<3} {m.kind:<9} {m.src}.{m.src_port} -> {m.dst}.{m.dst_port} '{m.tag}'="
@@ -289,19 +314,19 @@ class Console:
                      for m in ms]
             return ("\n".join(lines) or "  (no messages)"), [m.as_dict() for m in ms]
 
-        @self._cmd("chain", "chain <msg_id>", "Trace a message's causal past (challenge -> response path).", ["path"])
+        @self._cmd("chain", "chain <msg_id>", "Which earlier messages a message depends on (challenge to answer).", ["path"])
         def _chain(mid):
             chain = sim().causal_chain(int(str(mid).lstrip("m")))
             lines = [f"  m{m['id']}: {m['src']} -> {m['dst']} '{m['tag']}' depart {tu.fmt(m['depart_time_fs'])} "
                      f"arrive {tu.fmt(m['arrival_time_fs'])} (delay {tu.fmt(m['delay_fs'])})" for m in chain]
             return "\n".join(lines), chain
 
-        @self._cmd("decision", "decision", "Verification decision with an explanation.", ["explain"])
+        @self._cmd("decision", "decision", "Was the position accepted, and why.", ["explain", "why"])
         def _decision():
             d = sim().snapshot(since=len(sim().trace))["decision"]
             return d["summary"] + "\n" + "\n".join(f"  - {l}" for l in d["explanation"]), d
 
-        @self._cmd("invariants", "invariants", "Check trace invariants (ordering, causality, FSM consistency).",
+        @self._cmd("invariants", "invariants", "Check the run obeyed timing, causality and state-machine rules.",
                    ["check"])
         def _inv():
             r = S.invariants()
@@ -309,7 +334,7 @@ class Console:
                 return f"all {len(r['checked'])} invariants hold: {', '.join(r['checked'])}", r
             return "VIOLATIONS:\n" + "\n".join(f"  {v['invariant']}: {v['message']}" for v in r["violations"]), r
 
-        @self._cmd("set", "set <path> <json-value>", "Edit the project (e.g. set participants.P.processing_ns 0.3); resets.")
+        @self._cmd("set", "set <path> <json-value>", "Change a setting, e.g. set participants.P.processing_ns 0.3 (restarts the run).")
         def _set(path, value):
             S.edit(path, _value(value))
             iss = [i for i in S.validate() if i["level"] == "error"]
@@ -318,17 +343,17 @@ class Console:
                 msg += "\nproject now has errors:\n" + "\n".join(f"  {i['path']}: {i['message']}" for i in iss)
             return msg, None
 
-        @self._cmd("get", "get <path>", "Read a project value.")
+        @self._cmd("get", "get <path>", "Read one setting of the project.")
         def _get(path):
             v = S.get(path)
             return json.dumps(v, indent=2, default=str), v
 
-        @self._cmd("strategy", "strategy <participant> <automaton>", "Swap a participant's automaton (strategy).")
+        @self._cmd("strategy", "strategy <participant> <automaton>", "Give a participant a different strategy.")
         def _strategy(pid, name):
             S.use_strategy(pid, name)
             return f"{pid} now runs '{name}'; simulation reset", None
 
-        @self._cmd("caps", "caps <participant> [profile]", "Show or set a capability profile.", ["capabilities"])
+        @self._cmd("caps", "caps <participant> [profile]", "Show or change what a participant is allowed to do.", ["capabilities"])
         def _caps(pid, profile=None):
             if profile:
                 S.edit(f"participants.{pid}.capabilities", profile)
@@ -338,7 +363,7 @@ class Console:
                 else "unrestricted"), indent=2), None
 
         @self._cmd("batch", "batch <runs> [seed=<s>] [sweep=<path>:v1,v2,...] [workers=<n>]",
-                   "Run an experiment batch on the current project.", ["sweep"])
+                   "Repeat the run many times and report acceptance rates.", ["sweep"])
         def _batch(runs, seed=None, sweep=None, workers="1"):
             exp: Dict[str, Any] = {"id": "console", "name": "console batch", "runs": int(runs),
                                    "seed": int(seed) if seed is not None else S.project["simulation"]["seed"],
@@ -354,7 +379,7 @@ class Console:
             res = S.experiment(S.saved_experiment(eid))
             return _format_results(res), _strip_runs(res)
 
-        @self._cmd("export", "export trace|results|project <path>", "Export data as JSON (results: last experiment).")
+        @self._cmd("export", "export trace|results|project <path>", "Save the trace, the last experiment results or the project as JSON.")
         def _export(what, path):
             if what == "trace":
                 dump_json(S.export_trace(), path)
@@ -368,12 +393,12 @@ class Console:
                 raise SessionError("export what? trace | results | project")
             return f"wrote {what} to {path}", None
 
-        @self._cmd("checkpoint", "checkpoint <name>", "Snapshot the current simulation state.")
+        @self._cmd("checkpoint", "checkpoint <name>", "Remember the current moment of the run.")
         def _checkpoint(name):
             S.checkpoint(name)
             return f"checkpoint '{name}' at {tu.fmt(sim().now)}", None
 
-        @self._cmd("restore", "restore <name>", "Restore a checkpoint.")
+        @self._cmd("restore", "restore <name>", "Go back to a remembered moment.")
         def _restore(name):
             S.restore(name)
             return f"restored '{name}'; now {tu.fmt(sim().now)}", None

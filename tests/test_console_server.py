@@ -211,3 +211,22 @@ def test_patch_application_by_id():
                                                    "links[q0].loss_prob": 0.1})
     assert doc["participants"][2]["processing_ns"] == 0.3
     assert doc["links"][0]["loss_prob"] == 0.1
+
+
+def test_reloading_an_example_restarts_a_finished_run(client):
+    client.post("/api/sim/run", json={})
+    assert client.get("/api/sim/state").json()["stopped"]
+    s = client.post("/api/project/example/qpv_bb84_honest").json()
+    st = client.get("/api/sim/state").json()
+    assert st["events_executed"] == 0 and not st["stopped"]
+
+
+def test_layout_only_edit_keeps_the_running_simulation(client):
+    client.post("/api/sim/step", json={"n": 4})
+    doc = client.get("/api/project").json()["project"]
+    doc["participants"][0]["ui"] = {"x": 999, "y": 1}
+    client.put("/api/project", json=doc)
+    assert client.get("/api/sim/state").json()["events_executed"] == 4
+    doc["participants"][0]["processing_ns"] = 0.1
+    client.put("/api/project", json=doc)
+    assert client.get("/api/sim/state").json()["events_executed"] == 0

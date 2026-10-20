@@ -190,7 +190,7 @@ export function Spacetime() {
                   <path d={d} stroke={color} strokeWidth={hl ? 2.6 : 1.6} fill="none" strokeDasharray={lost ? "3 3" : undefined}
                     markerEnd={f >= 1 && !lost ? "url(#arr-c)" : undefined} />
                 )}
-                {lost && f >= 1 && <text x={X(xd)} y={T(tArr) + 4} textAnchor="middle" fill="var(--reject)" fontSize={13} fontWeight={700}>×</text>}
+                {lost && f >= 1 && <path d={`M ${X(xd) - 5} ${T(tArr) - 5} l 10 10 m 0 -10 l -10 10`} stroke="var(--reject)" strokeWidth={2} />}
                 <text x={(X(x0) + X(x1)) / 2 + 4} y={(T(t0) + T(t1)) / 2 - 4} fontSize={10} fill={color} fontFamily="var(--font-code)">
                   {mm.tag}{mm.kind === "classical" ? `=${JSON.stringify(mm.value)}` : ""}
                 </text>
@@ -219,7 +219,7 @@ export function Spacetime() {
         <text x={X(project.claim.position[0] ?? 0)} y={oy + plotH - 6} textAnchor="middle" fontSize={10} fill="var(--prover)">claimed position</text>
         {/* engine time */}
         <line x1={ox} x2={ox + plotW} y1={T(now)} y2={T(now)} stroke="var(--now)" strokeWidth={1} />
-        <text x={ox - 6} y={T(now) - 4} textAnchor="end" fontSize={10} fill="var(--now)" fontFamily="var(--font-code)">t = {nsLabel(now, 3)}</text>
+        <text x={ox + plotW - 4} y={T(now) - 4} textAnchor="end" fontSize={10} fill="var(--now)" fontFamily="var(--font-code)">t = {nsLabel(now, 3)}</text>
       </svg>
     </div>
   );

@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { api } from "../api";
 import { KIND_COLOR, nsLabel, ns } from "../format";
 import { Experiments } from "./Experiments";
+import { Icon } from "./ui";
 
 // ======================================================================= events
 export function EventLog() {
@@ -161,53 +162,7 @@ export function Timeline() {
 }
 
 // ======================================================================= console
-export function ConsolePanel() {
-  const log = useStore((s) => s.consoleLog);
-  const exec = useStore((s) => s.consoleExec);
-  const [line, setLine] = useState("");
-  const [hist, setHist] = useState<string[]>([]);
-  const [hi, setHi] = useState(-1);
-  const [comps, setComps] = useState<string[]>([]);
-  const out = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (out.current) out.current.scrollTop = out.current.scrollHeight; }, [log.length]);
-  const submit = async () => {
-    const l = line.trim();
-    if (!l) return;
-    setHist((h) => [...h, l]);
-    setHi(-1);
-    setLine("");
-    setComps([]);
-    await exec(l);
-  };
-  const complete = async () => {
-    const opts = await api.complete(line);
-    if (opts.length === 1) {
-      const parts = line.split(" ");
-      parts[parts.length - 1] = opts[0];
-      setLine(parts.join(" ") + " ");
-      setComps([]);
-    } else setComps(opts.slice(0, 30));
-  };
-  return (
-    <div className="console">
-      <div className="console-out" ref={out} data-testid="console-out">
-        {log.length === 0 && <div className="muted">Commands run against the engine. Try <b>help</b>, <b>step</b>, <b>run until=15</b>, <b>node P</b>, <b>chain 5</b>, <b>decision</b>, <b>batch 500 sweep=participants.E0.processing_ns:0,0.6</b>.</div>}
-        {log.map((e, i) => <div key={i} className={e.kind}>{e.text}</div>)}
-      </div>
-      {comps.length > 0 && <div className="completions">{comps.join("   ")}</div>}
-      <div className="console-in">
-        <span>qpv&gt;</span>
-        <input value={line} onChange={(e) => setLine(e.target.value)} aria-label="Console command" spellCheck={false} data-testid="console-input"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
-            else if (e.key === "Tab") { e.preventDefault(); complete(); }
-            else if (e.key === "ArrowUp" && hist.length) { e.preventDefault(); const n = hi < 0 ? hist.length - 1 : Math.max(0, hi - 1); setHi(n); setLine(hist[n]); }
-            else if (e.key === "ArrowDown" && hi >= 0) { e.preventDefault(); const n = hi + 1; if (n >= hist.length) { setHi(-1); setLine(""); } else { setHi(n); setLine(hist[n]); } }
-          }} />
-      </div>
-    </div>
-  );
-}
+export { ConsolePanel } from "./Console";
 
 // ======================================================================= validation
 export function ValidationPanel() {
@@ -254,7 +209,7 @@ export function ValidationPanel() {
             {inv.checked.map((k: string) => {
               const v = inv.violations.filter((x: any) => x.invariant === k);
               return (
-                <div key={k} className="issue"><span className="lvl" style={{ color: v.length ? "var(--reject)" : "var(--accept)" }}>{v.length ? "✗" : "✓"}</span>
+                <div key={k} className="issue"><span className="lvl" style={{ color: v.length ? "var(--reject)" : "var(--accept)", width: 16 }} aria-label={v.length ? "violated" : "holds"}>{v.length ? <Icon.cross /> : <Icon.check />}</span>
                   <span className="grow"><span className="mono">{k}</span> — {inv.descriptions[k]}
                     {v.map((x: any, i: number) => <div key={i} className="path" style={{ color: "var(--reject)" }}>{x.message}</div>)}</span></div>
               );

@@ -6,7 +6,7 @@ product state, so memory is ``O(sum 4^n_g)`` rather than ``4^N``.  Groups are
 merged (Kronecker product) when a multi-qubit operation touches several, and a
 measured qubit is split off again (it is in a product state after a
 projective measurement).  This mirrors the state-merging strategy described for
-NetSquid's ``QState`` and SeQUeNCe's quantum manager (docs/research).
+NetSquid's ``QState`` and SeQUeNCe's quantum manager (docs/REA_REPORT.md).
 
 Semantics: exact Born-rule sampling for measurements, exact CPTP maps for
 channels (Kraus sum), exact partial trace for discards.  Limits: a single group

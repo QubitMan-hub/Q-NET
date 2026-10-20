@@ -35,8 +35,9 @@ export function TextArea({ value, onCommit, code, rows = 3 }: { value: string; o
   );
 }
 
-export function NumberInput({ value, onCommit, step, min, max, ariaLabel, allowNull }: {
-  value: number | null; onCommit: (v: number | null) => void; step?: number; min?: number; max?: number; ariaLabel?: string; allowNull?: boolean;
+export function NumberInput({ value, onCommit, step, min, max, ariaLabel, allowNull, nullLabel = "auto" }: {
+  value: number | null; onCommit: (v: number | null) => void; step?: number; min?: number; max?: number; ariaLabel?: string;
+  allowNull?: boolean; nullLabel?: string;
 }) {
   const shown = value === null || value === undefined ? "" : String(value);
   const [v, setV] = useState(shown);
@@ -47,7 +48,7 @@ export function NumberInput({ value, onCommit, step, min, max, ariaLabel, allowN
   const commit = () => { if (!invalid && v !== shown) onCommit(parsed); };
   return (
     <input className={`input code${invalid ? " invalid" : ""}`} value={v} inputMode="decimal" aria-label={ariaLabel}
-      placeholder={allowNull ? "auto" : undefined}
+      placeholder={allowNull ? nullLabel : undefined}
       onChange={(e) => setV(e.target.value)} onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
@@ -106,6 +107,12 @@ export const Icon = {
   trash: () => <svg viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 9h5.6l.7-9" {...P} /></svg>,
   plus: () => <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" {...P} /></svg>,
   copy: () => <svg viewBox="0 0 16 16"><path d="M5.5 5.5h8v8h-8zM2.5 10.5v-8h8" {...P} /></svg>,
+  chevron: () => <svg viewBox="0 0 16 16"><path d="m6 4 4 4-4 4" {...P} /></svg>,
+  check: () => <svg viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7" {...P} strokeWidth={2} /></svg>,
+  alert: () => <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" {...P} /><path d="M8 4.8v3.8M8 11v.2" {...P} strokeWidth={2} /></svg>,
+  cross: () => <svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7m0-7-7 7" {...P} strokeWidth={2} /></svg>,
+  up: () => <svg viewBox="0 0 16 16"><path d="m4 10 4-4 4 4" {...P} /></svg>,
+  down: () => <svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4" {...P} /></svg>,
   theme: () => <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" {...P} /><path d="M8 2.5a5.5 5.5 0 0 0 0 11z" fill="currentColor" /></svg>,
 };
 

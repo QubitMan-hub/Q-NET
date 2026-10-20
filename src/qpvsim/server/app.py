@@ -52,7 +52,7 @@ def create_app(session: Optional[Session] = None) -> FastAPI:
             "functions": {**{k: "builtin" for k in PURE_FUNCTIONS}, **ENGINE_FUNCTIONS},
             "examples": {n: example(n)["meta"]["name"] for n in EXAMPLES},
             "automata": automaton_library(),
-            "console_commands": sorted({c.name for c in console.commands.values()}),
+            "console_commands": console.catalog(),
         }
 
     @app.get("/api/project")
@@ -64,7 +64,7 @@ def create_app(session: Optional[Session] = None) -> FastAPI:
     @app.put("/api/project")
     def put_project(doc: Dict[str, Any] = Body(...)):
         def f():
-            issues = S.set_project(doc)
+            issues = S.set_project(doc, keep_run_if_layout_only=True)
             return {"project": S.project, "issues": issues, "revision": S.revision, "sim_error": S.sim_error}
         return guarded(f)
 

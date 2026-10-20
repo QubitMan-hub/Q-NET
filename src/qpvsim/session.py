@@ -46,9 +46,13 @@ class Session:
         self.reset()
 
     # ------------------------------------------------------------ project
-    def set_project(self, doc: Dict[str, Any], reset: bool = True) -> List[Dict[str, Any]]:
+    def set_project(self, doc: Dict[str, Any], reset: bool = True,
+                    keep_run_if_layout_only: bool = False) -> List[Dict[str, Any]]:
+        """Replace the project.  Editor callers pass ``keep_run_if_layout_only`` so that
+        moving nodes on a canvas does not restart the run; loading always restarts it."""
         new = normalize(copy.deepcopy(doc))
-        layout_only = _strip_ui(new) == _strip_ui(self.project) if hasattr(self, "project") else False
+        layout_only = (keep_run_if_layout_only and hasattr(self, "project")
+                       and _strip_ui(new) == _strip_ui(self.project))
         self.project = new
         if layout_only and self.sim is not None:
             # canvas layout does not influence execution: keep the running simulation

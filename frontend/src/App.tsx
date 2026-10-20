@@ -60,7 +60,7 @@ function Toolbar() {
       <input className="project-name" value={s.project?.meta.name ?? ""} aria-label="Project name"
         onChange={(e) => s.edit((p) => { p.meta.name = e.target.value; })} />
       <div className="tool-group">
-        <select className="btn" value="" aria-label="Open example" onChange={(e) => e.target.value && s.loadExample(e.target.value)}>
+        <select className="btn" style={{ width: 150 }} value="" aria-label="Open example" onChange={(e) => e.target.value && s.loadExample(e.target.value)}>
           <option value="">Examples…</option>
           {Object.entries(s.meta?.examples ?? {}).map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
         </select>
@@ -90,8 +90,8 @@ function Toolbar() {
         <button className="btn primary" title="Run to completion (E)" disabled={!sim || sim.stopped} onClick={() => s.runToEnd()} data-testid="btn-run"><Icon.end />Run</button>
       </div>
       <div className="clock" title="Global simulation time (engine clock)">
-        <span className="xs muted">t</span><span className="t" data-testid="clock">{sim ? nsLabel(sim.now_fs, 6) : "—"}</span>
-        <span className="xs muted">events</span><span className="xs mono">{sim ? `${sim.events_executed} done · ${sim.pending.length} pending` : s.simError ? "invalid project" : "—"}</span>
+        <span className="t" data-testid="clock">{sim ? nsLabel(sim.now_fs, 6) : "—"}</span>
+        <span className="xs mono muted">{sim ? `${sim.events_executed} events · ${sim.pending.length} pending` : s.simError ? "invalid project" : "—"}</span>
       </div>
       <span className={`status-pill ${s.simError ? "error" : outcome ?? "pending"}`} data-testid="outcome">
         {s.simError ? "cannot run" : outcome === "accept" ? "accepted" : outcome === "reject" ? "rejected" : sim?.stopped ? "stopped" : "running"}
@@ -167,7 +167,7 @@ export default function App() {
   const s = useStore();
   const [leftW, dragLeft] = useDrag(196, "x", false, 150, 400);
   const [rightW, dragRight] = useDrag(360, "x", true, 260, 720);
-  const [dockH, dragDock] = useDrag(280, "y", true, 120, 900);
+  const [dockH, dragDock] = useDrag(300, "y", true, 120, 900);
 
   useEffect(() => { s.init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
