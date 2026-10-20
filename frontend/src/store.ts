@@ -1,0 +1,282 @@
+import { create } from "zustand";
+import { api, type ProjectResponse } from "./api";
+import { clone } from "./format";
+import type { Issue, Project, Selection, SimState } from "./types";
+
+export type CanvasView = "network" | "automaton" | "spacetime";
+export type DockTab = "events" | "timeline" | "console" | "experiments" | "validation" | "decision";
+
+export interface ConsoleEntry { kind: "cmd" | "ok" | "err" | "info"; text: string }
+
+interface Store {
+  meta: any | null;
+  project: Project | null;
+  revision: number;
+  issues: Issue[];
+  simError: string | null;
+  sim: SimState | null;
+  selection: Selection;
+  view: CanvasView;
+  focus: string | null; // participant whose automaton is shown
+  dock: DockTab;
+  past: Project[];
+  future: Project[];
+  playing: boolean;
+  playRate: number; // simulated ns per wall-clock second
+  busy: boolean;
+  dirtyPush: boolean;
+  toast: { text: string; error?: boolean } | null;
+  linkKind: "quantum" | "classical";
+  consoleLog: ConsoleEntry[];
+  highlightChain: number[];
+  theme: "light" | "dark";
+
+  init(): Promise<void>;
+  edit(fn: (p: Project) => void, opts?: { select?: Selection }): void;
+  undo(): void;
+  redo(): void;
+  loadExample(name: string): Promise<void>;
+  openDocument(doc: Project): Promise<void>;
+  reset(seed?: number): Promise<void>;
+  step(n?: number): Promise<void>;
+  runToEnd(): Promise<void>;
+  runUntil(ns: number): Promise<void>;
+  setPlaying(on: boolean): void;
+  consoleExec(line: string): Promise<void>;
+  select(sel: Selection): void;
+  setView(v: CanvasView): void;
+  setFocus(id: string | null): void;
+  setDock(d: DockTab): void;
+  setToast(text: string, error?: boolean): void;
+  setLinkKind(k: "quantum" | "classical"): void;
+  setPlayRate(r: number): void;
+  setHighlightChain(ids: number[]): void;
+  toggleTheme(): void;
+  refreshSim(full?: boolean): Promise<void>;
+}
+
+let pushTimer: number | undefined;
+let playTimer: number | undefined;
+let inflight = false;
+
+export const useStore = create<Store>((set, get) => {
+  const applyProject = (r: ProjectResponse) => {
+    set({ project: r.project, revision: r.revision, issues: r.issues, simError: r.sim_error, dirtyPush: false });
+  };
+
+  // Merge an incremental engine snapshot into the accumulated one.
+  const mergeSim = async (s: SimState, since: number) => {
+    const cur = get().sim;
+    if ((s as any).error !== undefined && !s.nodes) {
+      set({ sim: null, simError: (s as any).error ?? null });
+      return;
+    }
+    if (since === 0 || !cur) {
+      set({ sim: s });
+      return;
+    }
+    if (cur.revision === s.revision && s.trace_length === since + s.trace.length && cur.trace.length === since) {
+      set({ sim: { ...s, trace: cur.trace.concat(s.trace) } });
+    } else {
+      set({ sim: await api.state(0) });
+    }
+  };
+
+  const guard = async (fn: () => Promise<void>) => {
+    try {
+      await fn();
+    } catch (e: any) {
+      get().setToast(String(e?.message ?? e), true);
+      set({ playing: false });
+    }
+  };
+
+  const pushNow = async () => {
+    const p = get().project;
+    if (!p) return;
+    const r = await api.putProject(p);
+    set({ revision: r.revision, issues: r.issues, simError: r.sim_error, dirtyPush: false });
+    await get().refreshSim(true);
+  };
+
+  return {
+    meta: null, project: null, revision: 0, issues: [], simError: null, sim: null,
+    selection: { kind: "project" }, view: "network", focus: null, dock: "events",
+    past: [], future: [], playing: false, playRate: 4, busy: false, dirtyPush: false, toast: null,
+    linkKind: "quantum", consoleLog: [], highlightChain: [], theme: "light",
+
+    async init() {
+      await guard(async () => {
+        const [meta, proj] = await Promise.all([api.meta(), api.project()]);
+        set({ meta });
+        applyProject(proj);
+        await get().refreshSim(true);
+        const firstVerifier = proj.project.participants.find((p) => p.role === "verifier");
+        set({ focus: firstVerifier?.id ?? proj.project.participants[0]?.id ?? null });
+      });
+    },
+
+    async refreshSim(full = false) {
+      const since = full ? 0 : get().sim?.trace.length ?? 0;
+      const s = await api.state(since);
+      await mergeSim(s, since);
+    },
+
+    edit(fn, opts) {
+      const cur = get().project;
+      if (!cur) return;
+      const next = clone(cur);
+      try {
+        fn(next);
+      } catch (e: any) {
+        get().setToast(String(e?.message ?? e), true);
+        return;
+      }
+      set({ project: next, past: [...get().past.slice(-99), cur], future: [], dirtyPush: true, playing: false,
+        ...(opts?.select ? { selection: opts.select } : {}) });
+      window.clearTimeout(pushTimer);
+      pushTimer = window.setTimeout(() => guard(pushNow), 280);
+    },
+
+    undo() {
+      const { past, project, future } = get();
+      if (!past.length || !project) return;
+      set({ project: past[past.length - 1], past: past.slice(0, -1), future: [project, ...future], dirtyPush: true });
+      window.clearTimeout(pushTimer);
+      pushTimer = window.setTimeout(() => guard(pushNow), 120);
+    },
+
+    redo() {
+      const { past, project, future } = get();
+      if (!future.length || !project) return;
+      set({ project: future[0], future: future.slice(1), past: [...past, project], dirtyPush: true });
+      window.clearTimeout(pushTimer);
+      pushTimer = window.setTimeout(() => guard(pushNow), 120);
+    },
+
+    async loadExample(name) {
+      await guard(async () => {
+        set({ playing: false });
+        const r = await api.loadExample(name);
+        applyProject(r);
+        set({ past: [], future: [], selection: { kind: "project" }, highlightChain: [],
+          focus: r.project.participants.find((p) => p.role === "verifier")?.id ?? null });
+        await get().refreshSim(true);
+        get().setToast(`Loaded “${r.project.meta.name}”`);
+      });
+    },
+
+    async openDocument(doc) {
+      await guard(async () => {
+        const r = await api.putProject(doc);
+        applyProject(r);
+        set({ past: [], future: [], selection: { kind: "project" }, highlightChain: [] });
+        await get().refreshSim(true);
+        get().setToast(r.issues.some((i) => i.level === "error") ? "Opened with validation errors" : `Opened “${r.project.meta.name}”`,
+          r.issues.some((i) => i.level === "error"));
+      });
+    },
+
+    async reset(seed) {
+      await guard(async () => {
+        if (get().dirtyPush) await pushNow();
+        set({ playing: false, highlightChain: [] });
+        const s = await api.reset(seed);
+        await mergeSim(s, 0);
+      });
+    },
+
+    async step(n = 1) {
+      await guard(async () => {
+        if (get().dirtyPush) await pushNow();
+        const since = get().sim?.trace.length ?? 0;
+        await mergeSim(await api.step(n, since), since);
+      });
+    },
+
+    async runToEnd() {
+      await guard(async () => {
+        if (get().dirtyPush) await pushNow();
+        set({ playing: false });
+        const since = get().sim?.trace.length ?? 0;
+        await mergeSim(await api.run(since), since);
+      });
+    },
+
+    async runUntil(nsValue) {
+      await guard(async () => {
+        const since = get().sim?.trace.length ?? 0;
+        await mergeSim(await api.run(since, nsValue), since);
+      });
+    },
+
+    setPlaying(on) {
+      set({ playing: on });
+      window.clearInterval(playTimer);
+      if (!on) return;
+      const tickMs = 50;
+      playTimer = window.setInterval(async () => {
+        const st = get();
+        if (!st.playing) return window.clearInterval(playTimer);
+        if (inflight) return;
+        if (!st.sim || st.sim.stopped) {
+          set({ playing: false });
+          return window.clearInterval(playTimer);
+        }
+        inflight = true;
+        try {
+          // The engine advances its own clock to `until`; the UI only paces requests.
+          const until = st.sim.now_fs / 1e6 + (st.playRate * tickMs) / 1000;
+          const since = st.sim.trace.length;
+          await mergeSim(await api.run(since, until), since);
+        } catch (e: any) {
+          get().setToast(String(e?.message ?? e), true);
+          set({ playing: false });
+        } finally {
+          inflight = false;
+        }
+      }, tickMs);
+    },
+
+    async consoleExec(line) {
+      const log = get().consoleLog;
+      set({ consoleLog: [...log, { kind: "cmd", text: line }] });
+      await guard(async () => {
+        if (get().dirtyPush) await pushNow();
+        const since = get().sim?.trace.length ?? 0;
+        const rev = get().revision;
+        const r = await api.console(line, since);
+        set({ consoleLog: [...get().consoleLog, { kind: r.result.ok ? "ok" : "err", text: r.result.output || (r.result.ok ? "ok" : "failed") }] });
+        if (r.state.revision !== rev) {
+          applyProject(await api.project());
+          await get().refreshSim(true);
+        } else {
+          await mergeSim(r.state, since);
+        }
+      });
+    },
+
+    select(sel) {
+      set({ selection: sel });
+      if (sel.kind === "participant") set({ focus: sel.id });
+    },
+    setView(v) { set({ view: v }); },
+    setFocus(id) { set({ focus: id }); },
+    setDock(d) { set({ dock: d }); },
+    setToast(text, error) {
+      set({ toast: { text, error } });
+      window.setTimeout(() => { if (get().toast?.text === text) set({ toast: null }); }, error ? 6000 : 2600);
+    },
+    setLinkKind(k) { set({ linkKind: k }); },
+    setPlayRate(r) { set({ playRate: r }); },
+    setHighlightChain(ids) { set({ highlightChain: ids }); },
+    toggleTheme() {
+      const t = get().theme === "light" ? "dark" : "light";
+      document.documentElement.dataset.theme = t;
+      set({ theme: t });
+    },
+  };
+});
+
+export const selectedParticipant = (s: { project: Project | null; focus: string | null }) =>
+  s.project?.participants.find((p) => p.id === s.focus) ?? null;

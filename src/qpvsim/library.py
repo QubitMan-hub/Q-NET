@@ -101,11 +101,11 @@ def _verifier(kind: str) -> Dict[str, Any]:
         "initial": "idle",
         "states": [
             {"id": "idle", "kind": "initial", "label": "Idle", "ui": {"x": 0, "y": 0}},
-            {"id": "armed", "kind": "normal", "label": "Armed", "ui": {"x": 0, "y": 120},
+            {"id": "armed", "kind": "normal", "label": "Armed", "ui": {"x": 0, "y": 140},
              "description": "Waiting for the emission instant."},
-            {"id": "waiting", "kind": "normal", "label": "Awaiting answer", "ui": {"x": 0, "y": 240}},
-            {"id": "accepted", "kind": "terminal", "outcome": "accept", "label": "Accept", "ui": {"x": -160, "y": 380}},
-            {"id": "rejected", "kind": "terminal", "outcome": "reject", "label": "Reject", "ui": {"x": 160, "y": 380}},
+            {"id": "waiting", "kind": "normal", "label": "Awaiting answer", "ui": {"x": 0, "y": 290}},
+            {"id": "accepted", "kind": "terminal", "outcome": "accept", "label": "Accept", "ui": {"x": -300, "y": 470}},
+            {"id": "rejected", "kind": "terminal", "outcome": "reject", "label": "Reject", "ui": {"x": 300, "y": 470}},
         ],
         "transitions": [
             {"id": "arm", "from": "idle", "to": "armed", "trigger": {"type": "start"},
@@ -367,10 +367,10 @@ def cpv_verifier() -> Dict[str, Any]:
         "initial": "idle",
         "states": [
             {"id": "idle", "kind": "initial", "label": "Idle", "ui": {"x": 0, "y": 0}},
-            {"id": "armed", "kind": "normal", "label": "Armed", "ui": {"x": 0, "y": 120}},
-            {"id": "waiting", "kind": "normal", "label": "Awaiting answer", "ui": {"x": 0, "y": 240}},
-            {"id": "accepted", "kind": "terminal", "outcome": "accept", "label": "Accept", "ui": {"x": -160, "y": 380}},
-            {"id": "rejected", "kind": "terminal", "outcome": "reject", "label": "Reject", "ui": {"x": 160, "y": 380}},
+            {"id": "armed", "kind": "normal", "label": "Armed", "ui": {"x": 0, "y": 140}},
+            {"id": "waiting", "kind": "normal", "label": "Awaiting answer", "ui": {"x": 0, "y": 290}},
+            {"id": "accepted", "kind": "terminal", "outcome": "accept", "label": "Accept", "ui": {"x": -300, "y": 470}},
+            {"id": "rejected", "kind": "terminal", "outcome": "reject", "label": "Reject", "ui": {"x": 300, "y": 470}},
         ],
         "transitions": [
             {"id": "arm", "from": "idle", "to": "armed", "trigger": {"type": "start"}, "duration_ns": 0,
@@ -519,9 +519,9 @@ def _bb84_verifiers(doc: Dict[str, Any]) -> None:
     doc["automata"]["qpv_bb84_verifier_classical"] = _verifier("classical")
     doc["participants"] += [
         _participant("V0", "verifier", "Verifier V0 (qubit)", -V_DIST, "qpv_bb84_verifier_quantum",
-                     "verifier", {"x": 80, "y": 220}, dict(VERIFIER_PARAMS)),
+                     "verifier", {"x": 40, "y": 220}, dict(VERIFIER_PARAMS)),
         _participant("V1", "verifier", "Verifier V1 (basis)", V_DIST, "qpv_bb84_verifier_classical",
-                     "verifier", {"x": 900, "y": 220}, dict(VERIFIER_PARAMS)),
+                     "verifier", {"x": 1120, "y": 220}, dict(VERIFIER_PARAMS)),
     ]
     doc["resources"].append({"id": "vshared", "type": "shared_random", "holders": ["V0", "V1"],
                              "vars": {"x": "rand_bit()", "theta": "rand_bit()"}})
@@ -542,7 +542,7 @@ def bb84_honest(prover_x: float = 0.0, name: str = "QPV_BB84 — honest prover",
         _participant("P", "prover" if not displaced else "adversary",
                      "Prover P" if not displaced else "Dishonest prover P'", prover_x,
                      "qpv_bb84_honest_prover", "honest_prover" if not displaced else "no_entanglement",
-                     {"x": 490, "y": 220}, processing_ns=prover_processing_ns))
+                     {"x": 580, "y": 220}, processing_ns=prover_processing_ns))
     doc["links"] += [
         _link("q0", "quantum", "V0", "prover", "P", "left"),
         _link("c0", "classical", "V0", "prover", "P", "left"),
@@ -579,9 +579,9 @@ def bb84_collusion(strategy: str = "breidbart", adv_processing_ns: float = 0.0,
     doc["automata"][a1["name"]] = a1
     doc["participants"] += [
         _participant("E0", "adversary", "Adversary E0", -ADV_DIST, a0["name"], caps,
-                     {"x": 330, "y": 220}, params0, processing_ns=adv_processing_ns, group="coalition"),
+                     {"x": 360, "y": 380}, params0, processing_ns=adv_processing_ns, group="coalition"),
         _participant("E1", "adversary", "Adversary E1", ADV_DIST, a1["name"], caps,
-                     {"x": 650, "y": 220}, {}, processing_ns=adv_processing_ns, group="coalition"),
+                     {"x": 800, "y": 380}, {}, processing_ns=adv_processing_ns, group="coalition"),
     ]
     doc["links"] += [
         _link("q0", "quantum", "V0", "prover", "E0", "verifier"),
@@ -608,7 +608,7 @@ def cpv_honest() -> Dict[str, Any]:
     a = cpv_prover_ports()
     doc["automata"][a["name"]] = a
     doc["participants"].append(_participant("P", "prover", "Prover P", 0.0, a["name"], "honest_prover",
-                                            {"x": 490, "y": 220}, processing_ns=0.2))
+                                            {"x": 580, "y": 220}, processing_ns=0.2))
     doc["links"] += [_link("c0", "classical", "V0", "prover", "P", "left"),
                      _link("c1", "classical", "V1", "prover", "P", "right")]
     return doc
@@ -625,9 +625,9 @@ def cpv_collusion(adv_processing_ns: float = 0.0) -> Dict[str, Any]:
     doc["automata"][a["name"]] = a
     doc["participants"] += [
         _participant("E0", "adversary", "Adversary E0", -ADV_DIST, a["name"], "classical_only",
-                     {"x": 330, "y": 220}, processing_ns=adv_processing_ns, group="coalition"),
+                     {"x": 360, "y": 380}, processing_ns=adv_processing_ns, group="coalition"),
         _participant("E1", "adversary", "Adversary E1", ADV_DIST, a["name"], "classical_only",
-                     {"x": 650, "y": 220}, processing_ns=adv_processing_ns, group="coalition"),
+                     {"x": 800, "y": 380}, processing_ns=adv_processing_ns, group="coalition"),
     ]
     doc["links"] += [_link("c0", "classical", "V0", "prover", "E0", "verifier"),
                      _link("c1", "classical", "V1", "prover", "E1", "verifier"),
@@ -639,9 +639,9 @@ def _cpv_verifiers(doc):
     doc["automata"]["cpv_verifier"] = cpv_verifier()
     doc["participants"] += [
         _participant("V0", "verifier", "Verifier V0", -V_DIST, "cpv_verifier", "verifier",
-                     {"x": 80, "y": 220}, {**VERIFIER_PARAMS, "my_bit": "x0"}),
+                     {"x": 40, "y": 220}, {**VERIFIER_PARAMS, "my_bit": "x0"}),
         _participant("V1", "verifier", "Verifier V1", V_DIST, "cpv_verifier", "verifier",
-                     {"x": 900, "y": 220}, {**VERIFIER_PARAMS, "my_bit": "x1"}),
+                     {"x": 1120, "y": 220}, {**VERIFIER_PARAMS, "my_bit": "x1"}),
     ]
     doc["resources"].append({"id": "vshared", "type": "shared_random", "holders": ["V0", "V1"],
                              "vars": {"x0": "rand_bit()", "x1": "rand_bit()"}})

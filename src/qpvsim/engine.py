@@ -1017,7 +1017,20 @@ class Simulation:
             "trace_length": len(self.trace),
             "counters": dict(self.counters),
             "decision": decide(self),
+            "links": self.link_summary(),
         }
+
+    def link_summary(self) -> List[Dict[str, Any]]:
+        out, seen = [], set()
+        for ol in self.out_links.values():
+            lid = ol.link["id"]
+            if lid in seen:
+                continue
+            seen.add(lid)
+            out.append({"id": lid, "kind": ol.link["kind"], "distance_m": ol.distance_m,
+                        "speed_mps": ol.speed_mps, "propagation_fs": ol.base_delay_fs,
+                        "latency_fs": ol.latency_fs, "delay_fs": ol.base_delay_fs + ol.latency_fs})
+        return out
 
     def causal_chain(self, msg_id: int) -> List[Dict[str, Any]]:
         """All messages in the causal past of ``msg_id`` (inclusive), by departure."""

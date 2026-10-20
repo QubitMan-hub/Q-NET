@@ -72,7 +72,7 @@
       "noise": {},
       "group": null,
       "ui": {
-        "x": 80,
+        "x": 40,
         "y": 220
       }
     },
@@ -99,7 +99,7 @@
       "noise": {},
       "group": null,
       "ui": {
-        "x": 900,
+        "x": 1120,
         "y": 220
       }
     },
@@ -125,8 +125,8 @@
       "noise": {},
       "group": "coalition",
       "ui": {
-        "x": 330,
-        "y": 220
+        "x": 360,
+        "y": 380
       }
     },
     {
@@ -149,8 +149,8 @@
       "noise": {},
       "group": "coalition",
       "ui": {
-        "x": 650,
-        "y": 220
+        "x": 800,
+        "y": 380
       }
     }
   ],
@@ -292,7 +292,7 @@
           "label": "Armed",
           "ui": {
             "x": 0,
-            "y": 120
+            "y": 140
           },
           "description": "Waiting for the emission instant."
         },
@@ -302,7 +302,7 @@
           "label": "Awaiting answer",
           "ui": {
             "x": 0,
-            "y": 240
+            "y": 290
           }
         },
         {
@@ -311,8 +311,8 @@
           "outcome": "accept",
           "label": "Accept",
           "ui": {
-            "x": -160,
-            "y": 380
+            "x": -300,
+            "y": 470
           }
         },
         {
@@ -321,8 +321,8 @@
           "outcome": "reject",
           "label": "Reject",
           "ui": {
-            "x": 160,
-            "y": 380
+            "x": 300,
+            "y": 470
           }
         }
       ],
@@ -531,7 +531,7 @@
           "label": "Armed",
           "ui": {
             "x": 0,
-            "y": 120
+            "y": 140
           },
           "description": "Waiting for the emission instant."
         },
@@ -541,7 +541,7 @@
           "label": "Awaiting answer",
           "ui": {
             "x": 0,
-            "y": 240
+            "y": 290
           }
         },
         {
@@ -550,8 +550,8 @@
           "outcome": "accept",
           "label": "Accept",
           "ui": {
-            "x": -160,
-            "y": 380
+            "x": -300,
+            "y": 470
           }
         },
         {
@@ -560,8 +560,8 @@
           "outcome": "reject",
           "label": "Reject",
           "ui": {
-            "x": 160,
-            "y": 380
+            "x": 300,
+            "y": 470
           }
         }
       ],

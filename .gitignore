@@ -10,3 +10,4 @@ frontend/node_modules/
 frontend/dist/
 *.qpvtrace.json
 results/
+frontend/e2e/screenshots/

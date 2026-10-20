@@ -25,10 +25,19 @@ class SessionError(RuntimeError):
     pass
 
 
+def _strip_ui(obj: Any) -> Any:
+    """The document without editor layout fields (``ui``), which never affect execution."""
+    if isinstance(obj, dict):
+        return {k: _strip_ui(v) for k, v in obj.items() if k != "ui"}
+    if isinstance(obj, list):
+        return [_strip_ui(v) for v in obj]
+    return obj
+
+
 class Session:
     def __init__(self, project: Optional[Dict[str, Any]] = None):
-        self.project: Dict[str, Any] = normalize(project or example("qpv_bb84_honest"))
         self.sim: Optional[Simulation] = None
+        self.project: Dict[str, Any] = normalize(project or example("qpv_bb84_honest"))
         self.sim_error: Optional[str] = None
         self.checkpoints: Dict[str, Simulation] = {}
         self.results: List[Dict[str, Any]] = []
@@ -38,7 +47,14 @@ class Session:
 
     # ------------------------------------------------------------ project
     def set_project(self, doc: Dict[str, Any], reset: bool = True) -> List[Dict[str, Any]]:
-        self.project = normalize(copy.deepcopy(doc))
+        new = normalize(copy.deepcopy(doc))
+        layout_only = _strip_ui(new) == _strip_ui(self.project) if hasattr(self, "project") else False
+        self.project = new
+        if layout_only and self.sim is not None:
+            # canvas layout does not influence execution: keep the running simulation
+            self.sim.project["participants"] = new["participants"]
+            self.sim.project["automata"] = new["automata"]
+            return [i.as_dict() for i in validate_project(self.project)]
         self.revision += 1
         if reset:
             self.reset()
