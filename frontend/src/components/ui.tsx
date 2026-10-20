@@ -113,6 +113,9 @@ export const Icon = {
   cross: () => <svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7m0-7-7 7" {...P} strokeWidth={2} /></svg>,
   up: () => <svg viewBox="0 0 16 16"><path d="m4 10 4-4 4 4" {...P} /></svg>,
   down: () => <svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4" {...P} /></svg>,
+  panelLeft: () => <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" {...P} /><path d="M6 3v10" {...P} /></svg>,
+  panelRight: () => <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" {...P} /><path d="M10 3v10" {...P} /></svg>,
+  help: () => <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" {...P} /><path d="M6.3 6.3a1.8 1.8 0 1 1 2.5 1.6c-.5.2-.8.6-.8 1.1v.4M8 11.3v.2" {...P} /></svg>,
   theme: () => <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" {...P} /><path d="M8 2.5a5.5 5.5 0 0 0 0 11z" fill="currentColor" /></svg>,
 };
 

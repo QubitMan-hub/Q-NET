@@ -28,6 +28,7 @@ const launchOpts = { headless: true };
 try { require("node:fs").accessSync("/opt/pw-browsers/chromium"); } catch { /* default */ }
 const browser = await chromium.launch(launchOpts).catch(() => chromium.launch({ ...launchOpts, executablePath: "/opt/pw-browsers/chromium" }));
 const page = await browser.newPage({ viewport: { width: 1600, height: 960 } });
+await page.addInitScript(() => { try { localStorage.setItem("qpv.welcome.dismissed", "1"); } catch {} });
 const consoleErrors = [];
 page.on("pageerror", (e) => consoleErrors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text()); });

@@ -1,5 +1,22 @@
 import { create } from "zustand";
-import { api, type ProjectResponse } from "./api";
+import { api, IN_BROWSER, type ProjectResponse } from "./api";
+
+// Per-browser conveniences only (the engine state lives in the engine). Every
+// storage access is guarded: private windows and blocked storage must still work.
+const SAVED_KEY = "qpv.project.v1";
+export function storageGet(key: string): string | null {
+  try { return window.localStorage.getItem(key); } catch { return null; }
+}
+export function storageSet(key: string, value: string | null) {
+  try {
+    if (value === null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, value);
+  } catch { /* storage unavailable: nothing to persist */ }
+}
+function exampleFromHash(): string | null {
+  const m = window.location.hash.match(/example=([\w-]+)/);
+  return m ? m[1] : null;
+}
 import { clone } from "./format";
 import type { Issue, Project, Selection, SimState } from "./types";
 
@@ -111,9 +128,25 @@ export const useStore = create<Store>((set, get) => {
         const [meta, proj] = await Promise.all([api.meta(), api.project()]);
         set({ meta });
         applyProject(proj);
+        // A shared link (#example=name) wins; otherwise the in-browser build restores
+        // the visitor's last project from this browser.
+        const shared = exampleFromHash();
+        const saved = IN_BROWSER ? storageGet(SAVED_KEY) : null;
+        if (shared && meta.examples?.[shared]) {
+          applyProject(await api.loadExample(shared));
+        } else if (saved) {
+          try {
+            const r = await api.putProject(JSON.parse(saved));
+            applyProject(r);
+            get().setToast("Restored your last project from this browser");
+          } catch {
+            storageSet(SAVED_KEY, null);
+          }
+        }
         await get().refreshSim(true);
-        const firstVerifier = proj.project.participants.find((p) => p.role === "verifier");
-        set({ focus: firstVerifier?.id ?? proj.project.participants[0]?.id ?? null });
+        const p = get().project!;
+        const firstVerifier = p.participants.find((x) => x.role === "verifier");
+        set({ focus: firstVerifier?.id ?? p.participants[0]?.id ?? null });
       });
     },
 
@@ -160,6 +193,7 @@ export const useStore = create<Store>((set, get) => {
         set({ playing: false });
         const r = await api.loadExample(name);
         applyProject(r);
+        history.replaceState(null, "", `#example=${name}`);
         set({ past: [], future: [], selection: { kind: "project" }, highlightChain: [],
           focus: r.project.participants.find((p) => p.role === "verifier")?.id ?? null });
         await get().refreshSim(true);
@@ -169,6 +203,8 @@ export const useStore = create<Store>((set, get) => {
 
     async openDocument(doc) {
       await guard(async () => {
+        set({ view: "network" });
+        if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
         const r = await api.putProject(doc);
         applyProject(r);
         set({ past: [], future: [], selection: { kind: "project" }, highlightChain: [] });
@@ -287,3 +323,13 @@ export const useStore = create<Store>((set, get) => {
 
 export const selectedParticipant = (s: { project: Project | null; focus: string | null }) =>
   s.project?.participants.find((p) => p.id === s.focus) ?? null;
+
+// Autosave the project in the in-browser build so a reload does not lose work.
+if (IN_BROWSER) {
+  let saveTimer: number | undefined;
+  useStore.subscribe((st, prev) => {
+    if (!st.project || st.project === prev.project) return;
+    window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => storageSet(SAVED_KEY, JSON.stringify(st.project)), 400);
+  });
+}

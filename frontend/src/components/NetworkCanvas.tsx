@@ -99,6 +99,11 @@ const LinkEdge = memo(function LinkEdge({ id, source, target, sourceHandleId, ta
   const off = data.offset;
   const ax = a.x + nx * off, ay = a.y + ny * off, bx = b.x + nx * off, by = b.y + ny * off;
   const path = `M ${ax} ${ay} L ${bx} ${by}`;
+  // Parallel channels share a corridor: stagger their labels along the edge and
+  // put each on its own side so they never cover one another.
+  const quantumLink = data.link.kind === "quantum";
+  const side = quantumLink ? -1 : 1;
+  const labelAt = quantumLink ? 0.36 : 0.64;
   const quantum = data.link.kind === "quantum";
   const color = quantum ? "var(--quantum)" : "var(--classical)";
   const summary = sim?.links?.find((l) => l.id === data.link.id);
@@ -132,7 +137,7 @@ const LinkEdge = memo(function LinkEdge({ id, source, target, sourceHandleId, ta
       })}
       <EdgeLabelRenderer>
         <div className={`edge-label${selected ? " selected" : ""}`}
-          style={{ transform: `translate(-50%, -50%) translate(${(ax + bx) / 2 + nx * 12}px, ${(ay + by) / 2 + ny * 12}px)`, color }}
+          style={{ transform: `translate(-50%, -50%) translate(${ax + (bx - ax) * labelAt + nx * 14 * side}px, ${ay + (by - ay) * labelAt + ny * 14 * side}px)`, color }}
           onClick={() => select({ kind: "link", id: data.link.id })} data-testid={`link-${data.link.id}`}>
           {data.link.id} · {summary ? nsLabel(summary.delay_fs, 3) : `${data.link.kind}`}
         </div>

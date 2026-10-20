@@ -66,6 +66,10 @@ export function Spacetime() {
   }
   const plotW = (model.xmax - model.xmin) * pxPerM, plotH = tNs * pxPerNs;
   const ox = m.l + (W - plotW) / 2, oy = m.t + (H - plotH);
+  // On small plots, drop secondary text so labels do not collide.
+  const minGap = Math.min(...project.participants.map((a, i) => Math.min(...project.participants
+    .filter((_, j) => j !== i).map((b) => Math.abs(a.position[0] - b.position[0]) * pxPerM), Infinity)));
+  const compact = plotW < 420 || minGap < 70;
   const X = (xm: number) => ox + (xm - model.xmin) * pxPerM;
   const T = (fs: number) => oy + plotH - (fs / 1e6) * pxPerNs;
   const posOf = (id: string) => project.participants.find((p) => p.id === id)?.position[0] ?? 0;
@@ -91,8 +95,10 @@ export function Spacetime() {
         <div className="row"><span className="chan classical" />classical message</div>
         <div className="row"><svg width="22" height="8"><path d="M0 4h22" stroke="var(--ink-3)" strokeDasharray="2 3" /></svg>light cone of a challenge</div>
         <div className="row"><svg width="22" height="8"><path d="M4 4h14" stroke="var(--reject)" strokeWidth="2" /></svg>verifier deadline</div>
+        <div className="row"><svg width="22" height="8"><path d="M0 4h22" stroke="var(--now)" /></svg>engine time {nsLabel(sim.now_fs, 3)}</div>
       </div>
-      <svg width={w} height={h} role="img" aria-label="Spacetime diagram of the simulation run">
+      <svg width={w} height={h} role="img" aria-label="Spacetime diagram of the simulation run"
+        style={{ position: "absolute", inset: 0 }}>
         <defs>
           <marker id="arr-q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--quantum)" /></marker>
           <marker id="arr-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--classical)" /></marker>
@@ -161,7 +167,7 @@ export function Spacetime() {
               <g key={`d${i}`}>
                 <line x1={X(xd) - 12} x2={X(xd) + 12} y1={T(d.t)} y2={T(d.t)} stroke="var(--reject)" strokeWidth={2} />
                 <text x={X(xd) + (inward ? 8 : -8)} y={T(d.t) + 13} fontSize={10} fill="var(--reject)" textAnchor={inward ? "start" : "end"}>
-                  {d.node} deadline {nsLabel(d.t, 3)}
+                  {compact ? (d.t / 1e6).toFixed(3) : `${d.node} deadline ${nsLabel(d.t, 3)}`}
                 </text>
               </g>
             );
@@ -191,7 +197,9 @@ export function Spacetime() {
                     markerEnd={f >= 1 && !lost ? "url(#arr-c)" : undefined} />
                 )}
                 {lost && f >= 1 && <path d={`M ${X(xd) - 5} ${T(tArr) - 5} l 10 10 m 0 -10 l -10 10`} stroke="var(--reject)" strokeWidth={2} />}
-                <text x={(X(x0) + X(x1)) / 2 + 4} y={(T(t0) + T(t1)) / 2 - 4} fontSize={10} fill={color} fontFamily="var(--font-code)">
+                <text x={X(x0) + (X(x1) - X(x0)) * 0.3 + (xd >= x0 ? 6 : -6)} y={T(t0) + (T(t1) - T(t0)) * 0.3 - 4}
+                  textAnchor={xd >= x0 ? "start" : "end"} fontSize={10} fill={color} fontFamily="var(--font-code)"
+                  paintOrder="stroke" stroke="var(--paper)" strokeWidth={3}>
                   {mm.tag}{mm.kind === "classical" ? `=${JSON.stringify(mm.value)}` : ""}
                 </text>
                 <title>{`m${mm.id} ${mm.kind} '${mm.tag}' ${mm.src} → ${mm.dst}\ndepart ${nsLabel(t0)}\narrive ${nsLabel(mm.arrival_time_fs)}${lost ? " (lost)" : ""}\n${mm.distance_m.toFixed(6)} m at ${mm.speed_mps} m/s`}</title>
@@ -212,14 +220,14 @@ export function Spacetime() {
           <g key={`h${p.id}`} style={{ cursor: "pointer" }} onClick={() => select({ kind: "participant", id: p.id })}>
             <text x={X(p.position[0])} y={oy - 16} textAnchor="middle" fontSize={12} fontWeight={700} fill={`var(--${p.role})`}>{p.id}</text>
             <text x={X(p.position[0])} y={oy - 4} textAnchor="middle" fontSize={9.5} fill="var(--ink-3)" fontFamily="var(--font-code)">
-              {sim.nodes[p.id]?.state}
+              {compact ? "" : sim.nodes[p.id]?.state}
             </text>
           </g>
         ))}
         <text x={X(project.claim.position[0] ?? 0)} y={oy + plotH - 6} textAnchor="middle" fontSize={10} fill="var(--prover)">claimed position</text>
         {/* engine time */}
         <line x1={ox} x2={ox + plotW} y1={T(now)} y2={T(now)} stroke="var(--now)" strokeWidth={1} />
-        <text x={ox + plotW - 4} y={T(now) - 4} textAnchor="end" fontSize={10} fill="var(--now)" fontFamily="var(--font-code)">t = {nsLabel(now, 3)}</text>
+
       </svg>
     </div>
   );

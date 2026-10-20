@@ -10,6 +10,7 @@ import { ConsolePanel, DecisionPanel, EventLog, Experiments, Timeline, Validatio
 import { Brand, Icon } from "./components/ui";
 import { deleteSelection, duplicateParticipant, addState } from "./editing";
 import { IN_BROWSER, onEngineStatus } from "./api";
+import { storageGet, storageSet } from "./store";
 
 function useDrag(initial: number, axis: "x" | "y", invert = false, min = 120, max = 2000) {
   const [size, setSize] = useState(initial);
@@ -41,7 +42,9 @@ function blankProject(): Project {
   };
 }
 
-function Toolbar() {
+type Panels = { left: boolean; right: boolean; toggle: (side: "left" | "right") => void; showWelcome: () => void };
+
+function Toolbar({ panels }: { panels: Panels }) {
   const s = useStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const sim = s.sim;
@@ -58,6 +61,12 @@ function Toolbar() {
   return (
     <div className="toolbar">
       <div className="brand"><Brand /><span>QPV Workbench</span></div>
+      <div className="tool-group">
+        <button className={`btn ghost${panels.left ? " active" : ""}`} title="Show or hide the palette" aria-pressed={panels.left}
+          onClick={() => panels.toggle("left")}><Icon.panelLeft /></button>
+        <button className={`btn ghost${panels.right ? " active" : ""}`} title="Show or hide the inspector" aria-pressed={panels.right}
+          onClick={() => panels.toggle("right")}><Icon.panelRight /></button>
+      </div>
       <input className="project-name" value={s.project?.meta.name ?? ""} aria-label="Project name"
         onChange={(e) => s.edit((p) => { p.meta.name = e.target.value; })} />
       <div className="tool-group">
@@ -65,9 +74,9 @@ function Toolbar() {
           <option value="">Examples…</option>
           {Object.entries(s.meta?.examples ?? {}).map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
         </select>
-        <button className="btn ghost" title="Start an empty project" onClick={() => s.openDocument(blankProject())} data-testid="btn-new"><Icon.plus />New</button>
-        <button className="btn ghost" title="Open project file" onClick={() => fileRef.current?.click()}><Icon.open />Open</button>
-        <button className="btn ghost" title="Save project file (Ctrl+S)" onClick={download} data-testid="btn-save"><Icon.save />Save</button>
+        <button className="btn ghost" title="Start an empty project" onClick={() => s.openDocument(blankProject())} data-testid="btn-new"><Icon.plus /><span className="lbl">New</span></button>
+        <button className="btn ghost" title="Open project file" onClick={() => fileRef.current?.click()}><Icon.open /><span className="lbl">Open</span></button>
+        <button className="btn ghost" title="Save project file (Ctrl+S)" onClick={download} data-testid="btn-save"><Icon.save /><span className="lbl">Save</span></button>
         <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={async (e) => {
           const f = e.target.files?.[0];
           if (!f) return;
@@ -80,15 +89,15 @@ function Toolbar() {
       </div>
       <span className="grow" />
       <div className="tool-group" aria-label="Simulation controls">
-        <button className="btn ghost" title="Reset (R)" onClick={() => s.reset()} data-testid="btn-reset"><Icon.reset />Reset</button>
-        <button className="btn ghost" title="Execute one event (N)" disabled={!sim || sim.stopped} onClick={() => s.step(1)} data-testid="btn-step"><Icon.step />Step</button>
+        <button className="btn ghost" title="Reset (R)" onClick={() => s.reset()} data-testid="btn-reset"><Icon.reset /><span className="lbl">Reset</span></button>
+        <button className="btn ghost" title="Execute one event (N)" disabled={!sim || sim.stopped} onClick={() => s.step(1)} data-testid="btn-step"><Icon.step /><span className="lbl">Step</span></button>
         <button className={`btn ${s.playing ? "active" : "ghost"}`} title="Play: advance engine time continuously (Space)" disabled={!sim || sim.stopped}
-          onClick={() => s.setPlaying(!s.playing)} data-testid="btn-play">{s.playing ? <Icon.pause /> : <Icon.play />}{s.playing ? "Pause" : "Play"}</button>
+          onClick={() => s.setPlaying(!s.playing)} data-testid="btn-play">{s.playing ? <Icon.pause /> : <Icon.play />}<span className="lbl">{s.playing ? "Pause" : "Play"}</span></button>
         <select className="btn" value={s.playRate} title="Playback rate (simulated ns per second)" aria-label="Playback rate"
           onChange={(e) => s.setPlayRate(Number(e.target.value))}>
           {[0.5, 1, 2, 4, 10, 25].map((r) => <option key={r} value={r}>{r} ns/s</option>)}
         </select>
-        <button className="btn primary" title="Run to completion (E)" disabled={!sim || sim.stopped} onClick={() => s.runToEnd()} data-testid="btn-run"><Icon.end />Run</button>
+        <button className="btn primary" title="Run to completion (E)" disabled={!sim || sim.stopped} onClick={() => s.runToEnd()} data-testid="btn-run"><Icon.end /><span className="lbl lbl-keep">Run</span></button>
       </div>
       <div className="clock" title="Global simulation time (engine clock)">
         <span className="t" data-testid="clock">{sim ? nsLabel(sim.now_fs, 6) : "—"}</span>
@@ -97,6 +106,7 @@ function Toolbar() {
       <span className={`status-pill ${s.simError ? "error" : outcome ?? "pending"}`} data-testid="outcome">
         {s.simError ? "cannot run" : outcome === "accept" ? "accepted" : outcome === "reject" ? "rejected" : sim?.stopped ? "stopped" : "running"}
       </span>
+      <button className="btn ghost" title="Getting started" aria-label="Getting started" onClick={panels.showWelcome}><Icon.help /></button>
       <button className="btn ghost" title="Toggle dark theme" onClick={s.toggleTheme}><Icon.theme /></button>
     </div>
   );
@@ -181,13 +191,74 @@ function Boot({ error }: { error: string | null }) {
   );
 }
 
+const WELCOME_KEY = "qpv.welcome.dismissed";
+
+function Welcome({ onClose }: { onClose: () => void }) {
+  const s = useStore();
+  const step = async (fn: () => Promise<void> | void) => { await fn(); };
+  return (
+    <div className="welcome" role="dialog" aria-labelledby="welcome-title">
+      <h2 id="welcome-title">Simulate quantum position verification</h2>
+      <p>Two verifiers send challenges timed to meet at a claimed position; only someone really there can
+        answer both in time. Every step below runs in a real event-driven engine{IN_BROWSER ? ", here in your browser" : ""}.</p>
+      <ol>
+        <li>
+          <span>Run one round with an honest prover.</span>
+          <button className="btn" onClick={() => step(async () => { await s.loadExample("qpv_bb84_honest"); await s.runToEnd(); s.setDock("decision"); })}>Run honest round</button>
+        </li>
+        <li>
+          <span>See the challenges and answers on the light cone.</span>
+          <button className="btn" onClick={() => s.setView("spacetime")}>Open spacetime view</button>
+        </li>
+        <li>
+          <span>Watch two colluding attackers who share one entangled pair fool the verifiers.</span>
+          <button className="btn" onClick={() => step(async () => { await s.loadExample("qpv_bb84_teleportation_attack"); await s.runToEnd(); s.setView("spacetime"); s.setDock("decision"); })}>Run the attack</button>
+        </li>
+      </ol>
+      <p className="welcome-note">Then try the Console tab, change a setting in the Inspector, or repeat a run thousands of times under Experiments.
+        Results describe the model, not a security proof.</p>
+      <div className="row"><span className="grow" /><button className="btn primary" onClick={onClose}>Start exploring</button></div>
+    </div>
+  );
+}
+
 export default function App() {
   const s = useStore();
   const [leftW, dragLeft] = useDrag(196, "x", false, 150, 400);
   const [rightW, dragRight] = useDrag(360, "x", true, 260, 720);
   const [dockH, dragDock] = useDrag(300, "y", true, 120, 900);
+  const narrow = typeof window !== "undefined" && window.innerWidth < 1100;
+  const [left, setLeft] = useState(!narrow);
+  const [right, setRight] = useState(window.innerWidth >= 900);
+  const [welcome, setWelcome] = useState(() => storageGet(WELCOME_KEY) !== "1");
+  const panels: Panels = {
+    left, right,
+    toggle: (side) => (side === "left" ? setLeft((v) => !v) : setRight((v) => !v)),
+    showWelcome: () => setWelcome(true),
+  };
+  const closeWelcome = () => { setWelcome(false); storageSet(WELCOME_KEY, "1"); };
+  // Give the canvas room when the window becomes narrow (panels can be reopened).
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth < 1100) setLeft(false);
+      if (window.innerWidth < 900) setRight(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => { s.init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A shared link (#example=name) opened in a tab that is already running.
+  useEffect(() => {
+    const onHash = () => {
+      const m = window.location.hash.match(/example=([\w-]+)/);
+      const st = useStore.getState();
+      if (m && st.meta?.examples?.[m[1]]) st.loadExample(m[1]);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -226,10 +297,10 @@ export default function App() {
   const focusAut = s.project.participants.find((p) => p.id === s.focus)?.automaton;
   return (
     <div className="app">
-      <Toolbar />
-      <div className="workspace" style={{ gridTemplateColumns: `${leftW}px 1px minmax(0, 1fr) 1px ${rightW}px` }}>
-        <div className="panel"><div className="panel-head">Palette</div><div className="panel-body"><Palette /></div></div>
-        <div className="splitter-v" onPointerDown={dragLeft} role="separator" aria-orientation="vertical" />
+      <Toolbar panels={panels} />
+      <div className="workspace" style={{ gridTemplateColumns: `${left ? leftW : 0}px ${left ? 1 : 0}px minmax(0, 1fr) ${right ? 1 : 0}px ${right ? `min(${rightW}px, 70vw)` : "0px"}` }}>
+        <div className="panel" style={left ? undefined : { visibility: "hidden", overflow: "hidden" }}><div className="panel-head">Palette</div><div className="panel-body"><Palette /></div></div>
+        <div className="splitter-v" onPointerDown={dragLeft} role="separator" aria-orientation="vertical" style={left ? undefined : { visibility: "hidden", overflow: "hidden" }} />
         <div className="workspace" style={{ gridTemplateRows: `minmax(0, 1fr) 1px ${dockH}px`, minWidth: 0 }}>
           <div className="panel" style={{ background: "var(--paper)" }}>
             <div className="tabs" role="tablist">
@@ -270,14 +341,15 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div className="splitter-v" onPointerDown={dragRight} role="separator" aria-orientation="vertical" />
-        <div className="panel">
+        <div className="splitter-v" onPointerDown={dragRight} role="separator" aria-orientation="vertical" style={right ? undefined : { visibility: "hidden" }} />
+        <div className="panel" style={right ? undefined : { visibility: "hidden", overflow: "hidden" }}>
           <div className="panel-head">Inspector<span className="grow" />
             {s.selection.kind !== "project" && <button className="btn ghost" onClick={() => s.select({ kind: "project" })}>Project</button>}
           </div>
           <div className="panel-body"><Inspector /></div>
         </div>
       </div>
+      {welcome && <Welcome onClose={closeWelcome} />}
       {s.toast && <div className={`toast${s.toast.error ? " error" : ""}`} role="status">{s.toast.text}</div>}
     </div>
   );

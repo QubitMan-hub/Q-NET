@@ -96,6 +96,11 @@ Each row is reproducible with the command listed in [QPV_PROTOCOLS.md](QPV_PROTO
 - **Console**: a guided command line over the same engine. It has one-click starting actions, a command guide grouped by task, a live usage hint as you type, and results shown as readable command/result pairs.
 - **Dock**: searchable event log with an explanation of every timestamp, per-participant timelines, console, experiment runner (sweeps, Wilson intervals, RTT histograms, CSV/JSON export), validation and trace invariants, and the verification decision with its reasons.
 - **Controls**: step one event, play (advances the engine clock continuously), run to the end, reset, undo/redo, open/save/new, keyboard shortcuts, and a dark theme.
+- **First visit and sharing**:
+  - A short welcome card offers three one-click steps (run an honest round, open the spacetime view, run the teleportation attack). Reopen it with the **?** button.
+  - Links of the form `…/Q-NET/#example=qpv_bb84_teleportation_attack` open a bundled scenario directly; loading an example updates the address bar so it can be copied.
+  - In the browser build, your project is saved in this browser and restored when you come back. **Save** downloads it as a file.
+  - The palette and inspector can be hidden from the toolbar and collapse automatically in narrow windows.
 
 ## Documentation
 

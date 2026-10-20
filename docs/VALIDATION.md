@@ -53,6 +53,16 @@ Status at the time of writing: **112 tests, all passing**, on Python 3.13, NumPy
 
 Run it with `scripts/build_pages.sh` and a static file server.
 
+`frontend/e2e/audit.mjs` is a whole-surface audit of a running site, used against the live GitHub Pages deployment. It records every browser error, failed request and HTTP error, and checks:
+
+- the welcome card's three steps;
+- every example: stepping, playing, running to a decision, all three views and all six dock tabs;
+- inspector selections, 20 console commands, the invariant check, an experiment with both downloads;
+- New, drag-and-drop, undo and redo, and Save;
+- restoring the project after a reload, and `#example=` links;
+- dark theme;
+- horizontal overflow at 1366, 1024 and 390 px.
+
 ## Reference scenarios
 
 The six bundled examples are deterministic for a fixed seed. Their expected decisions are asserted in `tests/test_engine.py`, and their statistical behaviour is listed with reproduction commands in [QPV_PROTOCOLS.md](QPV_PROTOCOLS.md). The honest QPV_BB84 trace is checked against a hand calculation:
