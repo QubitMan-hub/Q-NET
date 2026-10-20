@@ -183,6 +183,22 @@ None of the surveyed tools provide the following as first-class features. Some c
 
 ### 7.1 Decided design
 
+> **Implementation note (added after the build).** This subsection records the design as
+> proposed before implementation. What was built is described in
+> [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md). Deviations:
+> - The modules are `kernel`, `quantum`, `protocol` (DSL, expressions, capabilities, project
+>   format), `engine`, `decision`, `invariants`, `experiments`, `session`, `console` and `server`.
+>   There are no separate `geometry`, `dsl`, `adversary` or `trace` packages.
+> - Validation is hand-written (`protocol/project.py`, `protocol/automaton.py`) rather than
+>   Pydantic-based, so that error messages can name domain concepts (unknown port, unreachable
+>   state, superluminal link).
+> - Composite waits are `all`-of-tags receive triggers. `any`-waits are expressed as several
+>   transitions leaving the same state.
+> - The rounding rule proposed here (ceiling for propagation delays) **was adopted**. User-given
+>   times are rounded half-to-even.
+> - The measurement random number is drawn inside the backend from its own seeded stream,
+>   rather than passed in by the caller.
+
 **Python ≥ 3.11 package `qpvsim`:**
 
 - `qpvsim.kernel`: `Simulator` with `now_fs: int`. It has a `heapq` of `(time_fs, priority, seq, event)` tuples, where `seq` is a global monotone counter and `priority` is a small int. Equal keys are impossible, so ordering is total and deterministic. Cancellation uses tombstones. All times are integers in femtoseconds, and conversions are exact (`1 ns = 10**6 fs`). Floats are allowed only for physical parameters, and are converted to integers with an explicit, documented rounding rule (ceil for propagation delays, so that rounding never makes a signal faster than light).

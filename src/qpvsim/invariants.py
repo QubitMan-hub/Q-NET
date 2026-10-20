@@ -74,7 +74,7 @@ def check_trace(sim: "Simulation") -> Dict[str, Any]:
             b = sim.nodes[m.dst].position
             dist = math.dist(a, b) if len(a) == len(b) else 0.0
             min_delay = tu.propagation_fs(dist, c)
-            if m.arrival_time - m.depart_time < min_delay - 1:  # 1 fs rounding slack
+            if m.arrival_time - m.depart_time < min_delay:  # exact: delays are rounded up
                 bad("relativistic_bound", f"message {m.id} took {m.arrival_time - m.depart_time} fs over "
                                           f"{dist:.6g} m (< {min_delay} fs at c)", msg=m.id)
         if m.consumed_time is not None:

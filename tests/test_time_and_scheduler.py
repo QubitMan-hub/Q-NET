@@ -25,11 +25,20 @@ def test_round_half_to_even_at_fs_boundary():
     assert tu.to_fs("2.5", "fs") == 2
 
 
-def test_propagation_is_exact_light_cone():
-    # 3 m at c: 3 / 299792458 s = 10.006922855944561... ns -> 10006923 fs
+def test_propagation_never_beats_the_light_cone():
+    # 3 m at c: 3 / 299792458 s = 10.006922855944561... ns -> rounded up to 10006923 fs
     assert tu.propagation_fs(3.0, tu.SPEED_OF_LIGHT_MPS) == 10_006_923
     exact = Fraction(3) / tu.SPEED_OF_LIGHT_MPS * 10 ** 15
-    assert abs(tu.propagation_fs(3, tu.SPEED_OF_LIGHT_MPS) - exact) <= Fraction(1, 2)
+    assert 0 <= tu.propagation_fs(3, tu.SPEED_OF_LIGHT_MPS) - exact < 1
+    assert tu.propagation_fs("0.000299792458", tu.SPEED_OF_LIGHT_MPS) == 1000  # exactly 1 ps, no rounding
+
+
+@settings(max_examples=300, deadline=None)
+@given(d=st.floats(0, 1e6, allow_nan=False), v=st.floats(1.0, 3e8))
+def test_propagation_rounding_is_ceiling(d, v):
+    exact = Fraction(repr(d)) / Fraction(repr(v)) * 10 ** 15
+    got = tu.propagation_fs(d, v)
+    assert got >= exact and got - exact < 1
     assert tu.propagation_fs(0, 1) == 0
     with pytest.raises(ValueError):
         tu.propagation_fs(1, 0)

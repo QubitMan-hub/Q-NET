@@ -246,7 +246,7 @@ function NetworkInner() {
         })}
         onNodesDelete={() => deleteSelection()}
         deleteKeyCode={null}
-        fitView fitViewOptions={{ padding: 0.25 }} minZoom={0.2} maxZoom={2.5}
+        fitView fitViewOptions={{ padding: 0.25, maxZoom: 1.2 }} minZoom={0.2} maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Lines} gap={40} color="var(--grid)" />

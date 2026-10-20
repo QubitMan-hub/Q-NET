@@ -8,8 +8,9 @@ and deadline comparisons (``arrival <= deadline``) are exact.
 Conversions from user-facing quantities (nanoseconds, metres, metres/second)
 go through :class:`fractions.Fraction` built from the *decimal string* of the
 value, so ``0.1`` ns is exactly 100000 fs rather than the nearest binary
-double.  The single rounding step is round-half-to-even to the nearest
-femtosecond, applied once at the conversion boundary.  See docs/SEMANTICS.md.
+double.  User-supplied times are rounded half-to-even to the nearest
+femtosecond, once, at the conversion boundary; propagation delays are rounded
+up (see :func:`propagation_fs`).  See docs/SEMANTICS.md.
 """
 
 from __future__ import annotations
@@ -79,14 +80,21 @@ def fs_to_unit(t: int, unit: str = "ns") -> float:
 
 
 def propagation_fs(distance_m: Number, speed_mps: Number) -> int:
-    """Exact light-cone delay ``distance / speed`` rounded once to fs."""
+    """Propagation delay ``distance / speed`` computed exactly and rounded **up** to fs.
+
+    Rounding up (ceiling) guarantees that discretisation can never make a
+    signal arrive earlier than the exact light-cone bound -- a conservative
+    choice for position verification, where an early arrival would be an
+    unphysical advantage.  The error is below 1 fs per hop.
+    """
     d = exact(distance_m)
     v = exact(speed_mps)
     if v <= 0:
         raise ValueError("signal speed must be positive")
     if d < 0:
         raise ValueError("distance must be non-negative")
-    return round_half_even(d / v * S)
+    q = d / v * S
+    return -((-q.numerator) // q.denominator)
 
 
 def fmt(t: int | None, unit: str = "ns", digits: int = 6) -> str:

@@ -158,6 +158,13 @@ function AutomatonInner() {
     });
   }, [a, selection, firedCount, lastT]);
 
+  // keep newly added or removed states in view
+  const stateCount = a?.states.length ?? 0;
+  useEffect(() => {
+    const h = window.setTimeout(() => rf.fitView({ padding: 0.3, maxZoom: 1.2, duration: 200 }), 60);
+    return () => window.clearTimeout(h);
+  }, [stateCount, aname, rf]);
+
   if (!participant || !a) {
     return <div className="empty">No participant selected. Add a participant on the <b>Network</b> canvas, then open its automaton here.</div>;
   }
@@ -183,6 +190,7 @@ function AutomatonInner() {
         key={a.name}
         nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange}
         onConnect={(c) => c.source && c.target && addTransition(a.name, c.source, c.target)}
+        connectionRadius={70}
         onNodeClick={(_, n) => select({ kind: "state", automaton: a.name, id: n.id })}
         onPaneClick={() => select({ kind: "participant", id: participant.id })}
         onNodeDragStop={(_, n) => edit((p) => {
@@ -190,7 +198,7 @@ function AutomatonInner() {
           if (st) st.ui = { x: Math.round(n.position.x), y: Math.round(n.position.y) };
         })}
         deleteKeyCode={null}
-        fitView fitViewOptions={{ padding: 0.3 }} minZoom={0.2} maxZoom={2.5}
+        fitView fitViewOptions={{ padding: 0.3, maxZoom: 1.2 }} minZoom={0.2} maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} color="var(--rule-strong)" />

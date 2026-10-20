@@ -27,6 +27,19 @@ function useDrag(initial: number, axis: "x" | "y", invert = false, min = 120, ma
   return [size, onDown] as const;
 }
 
+function blankProject(): Project {
+  return {
+    format: "qpvsim-project", version: 1,
+    meta: { name: "Untitled protocol", description: "", protocol: { name: "custom", version: "0.1", references: [] },
+      assumptions: [], limitations: ["Simulation results are evidence about the modelled behaviour only; they are not security proofs."] },
+    physics: { signal_speed_mps: 299792458, allow_superluminal: false },
+    simulation: { seed: 1, backend: "density_matrix", max_time_ns: 1000, max_events: 100000, stop_when: "verifiers_decided", priorities: {} },
+    claim: { prover: null, position: [0, 0] },
+    participants: [], links: [], resources: [], automata: {},
+    verification: { rule: "all", verifiers: null }, experiments: [],
+  };
+}
+
 function Toolbar() {
   const s = useStore();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -51,8 +64,9 @@ function Toolbar() {
           <option value="">Examples…</option>
           {Object.entries(s.meta?.examples ?? {}).map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
         </select>
+        <button className="btn ghost" title="Start an empty project" onClick={() => s.openDocument(blankProject())} data-testid="btn-new"><Icon.plus />New</button>
         <button className="btn ghost" title="Open project file" onClick={() => fileRef.current?.click()}><Icon.open />Open</button>
-        <button className="btn ghost" title="Save project file (Ctrl+S)" onClick={download}><Icon.save />Save</button>
+        <button className="btn ghost" title="Save project file (Ctrl+S)" onClick={download} data-testid="btn-save"><Icon.save />Save</button>
         <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={async (e) => {
           const f = e.target.files?.[0];
           if (!f) return;
