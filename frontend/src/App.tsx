@@ -9,6 +9,7 @@ import { Inspector } from "./components/Inspector";
 import { ConsolePanel, DecisionPanel, EventLog, Experiments, Timeline, ValidationPanel } from "./components/Dock";
 import { Brand, Icon } from "./components/ui";
 import { deleteSelection, duplicateParticipant, addState } from "./editing";
+import { IN_BROWSER, onEngineStatus } from "./api";
 
 function useDrag(initial: number, axis: "x" | "y", invert = false, min = 120, max = 2000) {
   const [size, setSize] = useState(initial);
@@ -163,6 +164,23 @@ const DOCK_TABS: [DockTab, string][] = [
   ["experiments", "Experiments"], ["validation", "Validation"], ["decision", "Decision"],
 ];
 
+function Boot({ error }: { error: string | null }) {
+  const [status, setStatus] = useState(IN_BROWSER ? "Starting…" : "Connecting to the simulation engine…");
+  useEffect(() => onEngineStatus((t) => t && setStatus(t)), []);
+  return (
+    <div className="boot">
+      <Brand />
+      <h1>QPV Workbench</h1>
+      <p className="boot-status" role="status">{status}</p>
+      {IN_BROWSER && !error && (
+        <p className="boot-note">The simulation engine runs entirely in your browser. The first visit downloads
+          the Python runtime and NumPy (about 15 MB); later visits load from cache.</p>
+      )}
+      {error && <p className="boot-error">{error}</p>}
+    </div>
+  );
+}
+
 export default function App() {
   const s = useStore();
   const [leftW, dragLeft] = useDrag(196, "x", false, 150, 400);
@@ -202,9 +220,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!s.project) {
-    return <div className="empty">Connecting to the simulation engine…{s.toast?.error && <div style={{ color: "var(--reject)" }}>{s.toast.text}</div>}</div>;
-  }
+  if (!s.project) return <Boot error={s.toast?.error ? s.toast.text : null} />;
   const errors = s.issues.filter((i) => i.level === "error").length;
   const warnings = s.issues.filter((i) => i.level === "warning").length;
   const focusAut = s.project.participants.find((p) => p.id === s.focus)?.automaton;

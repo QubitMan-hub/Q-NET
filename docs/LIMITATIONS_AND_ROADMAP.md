@@ -26,6 +26,11 @@
 - The Python kernel costs about 0.2 ms per event. This is fine for QPV rounds; experiments scale with parallel workers.
 - The server is single-user and has no authentication. It binds to localhost by default.
 
+**In-browser build (GitHub Pages)**
+- The engine runs in WebAssembly (Pyodide), roughly 2–5× slower than native Python, and experiments use a single process. Large sweeps are better run locally (`qpv experiment … --workers N`).
+- The first visit downloads the Python runtime and NumPy from the jsDelivr CDN (about 15 MB). An offline copy needs the local install.
+- Each browser tab has its own engine; nothing is stored on a server, so save projects with **Save**.
+
 **UI**
 - Snapshots are sent whole on each step. This is comfortable for traces of a few thousand records.
 - The spacetime diagram projects positions onto the x axis. Two- and three-dimensional geometry is simulated correctly (distances are Euclidean), but it is drawn only along x.

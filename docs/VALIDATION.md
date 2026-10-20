@@ -42,6 +42,17 @@ Status at the time of writing: **112 tests, all passing**, on Python 3.13, NumPy
 6. Undo the change: the claim is accepted again.
 7. Save: the downloaded file equals the engine's project document.
 
+`frontend/e2e/static.mjs` checks the **static GitHub Pages build**, where the engine runs in the browser via Pyodide:
+
+- the engine boots in the page (about 9 s on a first visit here);
+- the honest round ends at the hand-calculated 30.206923 ns, identical to the server build;
+- the console answers;
+- the teleportation attack is accepted;
+- a timing sweep runs, with the attack winning when fast and failing when slow;
+- no browser errors.
+
+Run it with `scripts/build_pages.sh` and a static file server.
+
 ## Reference scenarios
 
 The six bundled examples are deterministic for a fixed seed. Their expected decisions are asserted in `tests/test_engine.py`, and their statistical behaviour is listed with reproduction commands in [QPV_PROTOCOLS.md](QPV_PROTOCOLS.md). The honest QPV_BB84 trace is checked against a hand calculation:

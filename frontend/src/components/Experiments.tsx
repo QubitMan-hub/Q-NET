@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
-import { api } from "../api";
+import { api, downloadFrom } from "../api";
 import { clone, uniqueId } from "../format";
 import type { ExperimentSpec } from "../types";
 import { Field, NumberInput, TextInput } from "./ui";
@@ -11,7 +11,7 @@ function parseValues(s: string): any[] {
 
 /** Acceptance rate per sweep point with 95% Wilson intervals, plotted from the engine's run records. */
 function AcceptanceChart({ points, axis }: { points: any[]; axis: string }) {
-  const W = 560, H = 230, l = 52, r = 16, t = 14, b = 46;
+  const W = 560, H = 246, l = 52, r = 16, t = 30, b = 46;
   const n = points.length;
   const x = (i: number) => l + (n === 1 ? (W - l - r) / 2 : (i / (n - 1)) * (W - l - r));
   const y = (p: number) => t + (1 - p) * (H - t - b);
@@ -43,7 +43,7 @@ function AcceptanceChart({ points, axis }: { points: any[]; axis: string }) {
       <text x={(l + W - r) / 2} y={H - 8} textAnchor="middle" fontSize={11} fill="var(--ink-3)">{axis || "configuration"}</text>
       <text transform={`translate(13 ${(t + H - b) / 2}) rotate(-90)`} textAnchor="middle" fontSize={11} fill="var(--ink-3)">P(accept), 95% CI</text>
       {verifierIds.map((v, k) => (
-        <g key={v} transform={`translate(${l + 8 + k * 70} ${t + 6})`}>
+        <g key={v} transform={`translate(${l + 8 + k * 70} 12)`}>
           <circle r={3} fill={vcolors[k % 4]} /><text x={7} y={3.5} fontSize={10} fill="var(--ink-2)">{v} alone</text>
         </g>
       ))}
@@ -134,7 +134,7 @@ export function Experiments() {
         <Field label="Name"><TextInput value={draft.name ?? ""} onCommit={(v) => setDraft({ ...draft, name: v })} /></Field>
         <Field label="Runs per point"><NumberInput value={draft.runs} min={1} step={100} onCommit={(v) => setDraft({ ...draft, runs: Math.round(v ?? 100) })} /></Field>
         <Field label="Master seed"><NumberInput value={draft.seed} min={0} step={1} onCommit={(v) => setDraft({ ...draft, seed: Math.round(v ?? 0) })} /></Field>
-        <Field label="Workers" title="Parallel processes (results identical to 1 worker)"><NumberInput value={draft.workers ?? 1} min={1} max={32} step={1} onCommit={(v) => setDraft({ ...draft, workers: Math.round(v ?? 1) })} /></Field>
+        {useStore.getState().meta?.parallel_experiments !== false && <Field label="Workers" title="Parallel processes (results identical to 1 worker)"><NumberInput value={draft.workers ?? 1} min={1} max={32} step={1} onCommit={(v) => setDraft({ ...draft, workers: Math.round(v ?? 1) })} /></Field>}
         <Field label="Sweep" stack title="One axis per line: path: v1, v2, … (axes form a grid)">
           <textarea className="textarea code" rows={3} defaultValue={sweepText} key={sweepText} spellCheck={false}
             placeholder="participants.E0.processing_ns: 0, 0.2, 0.4"
@@ -167,8 +167,8 @@ export function Experiments() {
               <b>{res.experiment.name ?? res.experiment.id}</b>
               <span className="muted small">{res.provenance.project_name} · backend {res.provenance.backend} · engine {res.provenance.engine_version} · seed {res.experiment.seed}</span>
               <span className="grow" />
-              <a className="btn" href={`/api/experiments/${job.id}/csv`} download="results.csv">CSV</a>
-              <a className="btn" href={`/api/experiments/${job.id}/raw`} download="results.json">Raw JSON</a>
+              <button className="btn" onClick={() => downloadFrom(`/api/experiments/${job.id}/csv`, "results.csv", "text/csv").catch((e) => setToast(String(e.message), true))}>Download CSV</button>
+              <button className="btn" onClick={() => downloadFrom(`/api/experiments/${job.id}/raw`, "results.json").catch((e) => setToast(String(e.message), true))}>Download raw runs</button>
             </div>
             <AcceptanceChart points={res.points} axis={axis} />
             <table className="grid" style={{ marginTop: 6 }}>

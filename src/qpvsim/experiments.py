@@ -23,7 +23,6 @@ import copy
 import itertools
 import math
 import time
-from concurrent.futures import ProcessPoolExecutor
 from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
@@ -158,6 +157,8 @@ def run_experiment(project: Dict[str, Any], exp: Dict[str, Any],
         seeds = [run_seed(master, k, i) for i in range(runs)]
         raw: List[Dict[str, Any]] = []
         if workers > 1 and runs >= 50:
+            # imported lazily: multiprocessing is unavailable in the browser build (Pyodide)
+            from concurrent.futures import ProcessPoolExecutor
             chunks = [seeds[i::workers] for i in range(workers)]
             with ProcessPoolExecutor(max_workers=workers) as pool:
                 for res in pool.map(_run_chunk, [(doc, c) for c in chunks]):

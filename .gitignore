@@ -11,3 +11,4 @@ frontend/dist/
 *.qpvtrace.json
 /results/
 frontend/e2e/screenshots/
+/site/

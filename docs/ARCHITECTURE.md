@@ -11,7 +11,16 @@ Every number, state and animation the UI shows originates in the Python engine:
 
 The UI never computes protocol behaviour, timing or results. The browser end-to-end tests (`frontend/e2e/run.mjs`) check this by comparing what the UI displays with what the engine API reports after each action.
 
-The kernel has no dependency on the UI, the HTTP server or any web framework. Simulations run headlessly from Python, the CLI, the console or the test suite.
+The kernel has no dependency on the UI, the HTTP server or any web framework.
+
+## Two ways to run the same engine
+
+Every API route is implemented once, in `qpvsim/webapi.py` (`WebAPI.handle(method, url, body)`). It is used by two transports:
+
+- **Local server**: `qpv serve` wraps the dispatcher in FastAPI (`server/app.py`). Experiments run in a background thread and can use several processes.
+- **Static build (GitHub Pages)**: `scripts/build_pages.sh` builds the UI with `VITE_BACKEND=pyodide` and ships the `qpvsim` package as `qpvsim.zip`. In the browser, a Web Worker (`frontend/src/pyworker.ts`) loads Pyodide and NumPy, unpacks the package, and answers the UI's API calls through `qpvsim.webapi.handle_json`. There is no server.
+
+Both transports execute the same Python code, so a project and seed give identical traces either way. The static build runs experiments in a single process, inside the request, so the progress bar jumps straight to "done". Simulations run headlessly from Python, the CLI, the console or the test suite.
 
 ## Components
 

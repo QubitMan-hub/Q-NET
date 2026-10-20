@@ -20,6 +20,10 @@ Researchers can:
 
 ## Quick start
 
+**In the browser:** open <https://qubitman-hub.github.io/Q-NET/>. The complete Python engine runs inside the page (Pyodide, in a Web Worker); nothing is installed and no data leaves your machine. The first visit downloads the Python runtime and NumPy (about 15 MB).
+
+**Locally** (faster, parallel experiments, CLI and scripting):
+
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[server,test]"     # Python ≥ 3.10; the UI bundle ships prebuilt in the package
@@ -115,6 +119,7 @@ pip install -e ".[server,test]"
 pytest                                   # 112 tests incl. browser end-to-end (skipped without node+playwright)
 python scripts/bench.py                  # performance benchmark
 scripts/check_clean_install.sh           # fresh-venv install + tests + server check
+scripts/build_pages.sh                   # static in-browser build into ./site (what GitHub Pages serves)
 cd frontend && npm install && npm run build   # rebuild the UI into src/qpvsim/server/static
 npm run dev                              # UI dev server (proxies /api to qpv serve on :8765)
 ```
