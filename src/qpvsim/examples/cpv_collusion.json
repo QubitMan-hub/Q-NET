@@ -1,0 +1,556 @@
+{
+  "format": "qpvsim-project",
+  "version": 1,
+  "meta": {
+    "name": "Classical PV \u2014 colluding adversaries",
+    "description": "Two colluding adversaries copy-and-forward the verifiers' bits and answer the XOR; classical PV is insecure against such coalitions (Chandran et al. 2009).",
+    "protocol": {
+      "name": "Classical-PV",
+      "version": "1.0",
+      "references": [
+        "N. Chandran, V. Goyal, R. Moriarty, R. Ostrovsky, 'Position based cryptography', CRYPTO 2009, LNCS 5677; ePrint 2009/364"
+      ]
+    },
+    "assumptions": [
+      "One spatial dimension in effect: all participants lie on the x axis; signals travel on straight lines at the configured speed (default: vacuum speed of light).",
+      "Verifiers are trusted, know their own positions and the claimed position exactly, share private randomness (x, theta) established before t=0, and have synchronised clocks unless clock offsets/drift are configured.",
+      "Verifiers decide offline after the round; the final decision combines both verdicts with the rule 'all must accept'.",
+      "One simulation run = one protocol round; acceptance probabilities are estimated over many independent runs (experiments)."
+    ],
+    "limitations": [
+      "Simulation results are evidence about the modelled behaviour only; they are not security proofs.",
+      "No special/general-relativistic effects beyond a finite signal speed; no clock-synchronisation protocol is modelled (offsets/drift are fixed parameters).",
+      "Qubit loss makes QPV_BB84 attackable by provers who may claim loss; this model treats a missing answer as a rejection and does not model loss-tolerant variants.",
+      "Adversary strategies are the specific automata supplied; the simulator does not search over all strategies, so observed success rates are lower bounds on what attackers can achieve."
+    ]
+  },
+  "physics": {
+    "signal_speed_mps": 299792458,
+    "allow_superluminal": false
+  },
+  "simulation": {
+    "seed": 7,
+    "backend": "density_matrix",
+    "max_time_ns": 1000,
+    "max_events": 100000,
+    "stop_when": "verifiers_decided",
+    "priorities": {}
+  },
+  "claim": {
+    "prover": null,
+    "position": [
+      0.0,
+      0.0
+    ]
+  },
+  "participants": [
+    {
+      "id": "V0",
+      "role": "verifier",
+      "label": "Verifier V0",
+      "position": [
+        -3.0,
+        0.0
+      ],
+      "automaton": "cpv_verifier",
+      "params": {
+        "t_ref_ns": 20.0,
+        "tolerance_ns": 0.5,
+        "my_bit": "x0"
+      },
+      "processing_ns": 0.0,
+      "start_ns": 0,
+      "clock": {
+        "offset_ns": 0,
+        "drift_ppm": 0
+      },
+      "capabilities": "verifier",
+      "noise": {},
+      "group": null,
+      "ui": {
+        "x": 80,
+        "y": 220
+      }
+    },
+    {
+      "id": "V1",
+      "role": "verifier",
+      "label": "Verifier V1",
+      "position": [
+        3.0,
+        0.0
+      ],
+      "automaton": "cpv_verifier",
+      "params": {
+        "t_ref_ns": 20.0,
+        "tolerance_ns": 0.5,
+        "my_bit": "x1"
+      },
+      "processing_ns": 0.0,
+      "start_ns": 0,
+      "clock": {
+        "offset_ns": 0,
+        "drift_ppm": 0
+      },
+      "capabilities": "verifier",
+      "noise": {},
+      "group": null,
+      "ui": {
+        "x": 900,
+        "y": 220
+      }
+    },
+    {
+      "id": "E0",
+      "role": "adversary",
+      "label": "Adversary E0",
+      "position": [
+        -1.5,
+        0.0
+      ],
+      "automaton": "cpv_adv_copy_forward",
+      "params": {},
+      "processing_ns": 0.0,
+      "start_ns": 0,
+      "clock": {
+        "offset_ns": 0,
+        "drift_ppm": 0
+      },
+      "capabilities": "classical_only",
+      "noise": {},
+      "group": "coalition",
+      "ui": {
+        "x": 330,
+        "y": 220
+      }
+    },
+    {
+      "id": "E1",
+      "role": "adversary",
+      "label": "Adversary E1",
+      "position": [
+        1.5,
+        0.0
+      ],
+      "automaton": "cpv_adv_copy_forward",
+      "params": {},
+      "processing_ns": 0.0,
+      "start_ns": 0,
+      "clock": {
+        "offset_ns": 0,
+        "drift_ppm": 0
+      },
+      "capabilities": "classical_only",
+      "noise": {},
+      "group": "coalition",
+      "ui": {
+        "x": 650,
+        "y": 220
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": "c0",
+      "kind": "classical",
+      "a": {
+        "node": "V0",
+        "port": "prover"
+      },
+      "b": {
+        "node": "E0",
+        "port": "verifier"
+      },
+      "directed": false,
+      "length_m": null,
+      "speed_mps": null,
+      "latency_ns": 0,
+      "jitter_ns": 0,
+      "loss_prob": 0,
+      "attenuation_db_per_km": 0,
+      "noise": {}
+    },
+    {
+      "id": "c1",
+      "kind": "classical",
+      "a": {
+        "node": "V1",
+        "port": "prover"
+      },
+      "b": {
+        "node": "E1",
+        "port": "verifier"
+      },
+      "directed": false,
+      "length_m": null,
+      "speed_mps": null,
+      "latency_ns": 0,
+      "jitter_ns": 0,
+      "loss_prob": 0,
+      "attenuation_db_per_km": 0,
+      "noise": {}
+    },
+    {
+      "id": "cE",
+      "kind": "classical",
+      "a": {
+        "node": "E0",
+        "port": "partner"
+      },
+      "b": {
+        "node": "E1",
+        "port": "partner"
+      },
+      "directed": false,
+      "length_m": null,
+      "speed_mps": null,
+      "latency_ns": 0,
+      "jitter_ns": 0,
+      "loss_prob": 0,
+      "attenuation_db_per_km": 0,
+      "noise": {}
+    }
+  ],
+  "resources": [
+    {
+      "id": "vshared",
+      "type": "shared_random",
+      "holders": [
+        "V0",
+        "V1"
+      ],
+      "vars": {
+        "x0": "rand_bit()",
+        "x1": "rand_bit()"
+      }
+    }
+  ],
+  "automata": {
+    "cpv_verifier": {
+      "name": "cpv_verifier",
+      "role": "verifier",
+      "description": "Classical position verification (Chandran et al. 2009, 1-D): sends its random bit and accepts iff the answer x0 XOR x1 arrives by the light-speed deadline.",
+      "ports": [
+        "prover"
+      ],
+      "params": {
+        "t_ref_ns": {
+          "default": 20.0,
+          "description": "Agreed arrival time of both challenges at the claim."
+        },
+        "tolerance_ns": {
+          "default": 0.5,
+          "description": "Deadline slack."
+        },
+        "my_bit": {
+          "default": "x0",
+          "description": "Which shared bit this verifier sends: x0 or x1."
+        }
+      },
+      "variables": {
+        "x0": 0,
+        "x1": 0,
+        "deadline": 0.0,
+        "sent_at": 0.0
+      },
+      "initial": "idle",
+      "states": [
+        {
+          "id": "idle",
+          "kind": "initial",
+          "label": "Idle",
+          "ui": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "armed",
+          "kind": "normal",
+          "label": "Armed",
+          "ui": {
+            "x": 0,
+            "y": 120
+          }
+        },
+        {
+          "id": "waiting",
+          "kind": "normal",
+          "label": "Awaiting answer",
+          "ui": {
+            "x": 0,
+            "y": 240
+          }
+        },
+        {
+          "id": "accepted",
+          "kind": "terminal",
+          "outcome": "accept",
+          "label": "Accept",
+          "ui": {
+            "x": -160,
+            "y": 380
+          }
+        },
+        {
+          "id": "rejected",
+          "kind": "terminal",
+          "outcome": "reject",
+          "label": "Reject",
+          "ui": {
+            "x": 160,
+            "y": 380
+          }
+        }
+      ],
+      "transitions": [
+        {
+          "id": "arm",
+          "from": "idle",
+          "to": "armed",
+          "trigger": {
+            "type": "start"
+          },
+          "duration_ns": 0,
+          "label": "schedule challenge",
+          "actions": [
+            {
+              "op": "set",
+              "var": "deadline",
+              "expr": "fs_round(t_ref_ns + claim_travel_ns + tolerance_ns)"
+            },
+            {
+              "op": "timer",
+              "name": "emit",
+              "at_ns": "fs_round(t_ref_ns - claim_travel_ns)"
+            }
+          ]
+        },
+        {
+          "id": "emit",
+          "from": "armed",
+          "to": "waiting",
+          "trigger": {
+            "type": "timer",
+            "name": "emit"
+          },
+          "duration_ns": 0,
+          "label": "send bit",
+          "actions": [
+            {
+              "op": "send",
+              "port": "prover",
+              "tag": "bit",
+              "value": "x0 if my_bit == 'x0' else x1"
+            },
+            {
+              "op": "set",
+              "var": "sent_at",
+              "expr": "now"
+            },
+            {
+              "op": "record",
+              "key": "challenge_sent_ns",
+              "value": "now"
+            },
+            {
+              "op": "record",
+              "key": "deadline_ns",
+              "value": "deadline"
+            },
+            {
+              "op": "timer",
+              "name": "deadline",
+              "at_ns": "deadline"
+            }
+          ]
+        },
+        {
+          "id": "accept",
+          "from": "waiting",
+          "to": "accepted",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "answer"
+            ],
+            "port": "prover"
+          },
+          "guard": "msg.value == (x0 ^ x1) and msg.time <= deadline",
+          "duration_ns": 0,
+          "label": "correct & on time",
+          "actions": [
+            {
+              "op": "cancel_timer",
+              "name": "deadline"
+            },
+            {
+              "op": "record",
+              "key": "response_ns",
+              "value": "msg.time"
+            },
+            {
+              "op": "record",
+              "key": "rtt_ns",
+              "value": "msg.time - sent_at"
+            },
+            {
+              "op": "verdict",
+              "outcome": "accept",
+              "reason": "'correct XOR received on time'"
+            }
+          ]
+        },
+        {
+          "id": "wrong",
+          "from": "waiting",
+          "to": "rejected",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "answer"
+            ],
+            "port": "prover"
+          },
+          "duration_ns": 0,
+          "label": "wrong answer",
+          "actions": [
+            {
+              "op": "cancel_timer",
+              "name": "deadline"
+            },
+            {
+              "op": "record",
+              "key": "response_ns",
+              "value": "msg.time"
+            },
+            {
+              "op": "verdict",
+              "outcome": "reject",
+              "reason": "'wrong answer ' + str(msg.value)"
+            }
+          ]
+        },
+        {
+          "id": "timeout",
+          "from": "waiting",
+          "to": "rejected",
+          "trigger": {
+            "type": "timer",
+            "name": "deadline"
+          },
+          "duration_ns": 0,
+          "label": "deadline passed",
+          "actions": [
+            {
+              "op": "verdict",
+              "outcome": "reject",
+              "reason": "'no answer by the deadline'"
+            }
+          ]
+        }
+      ]
+    },
+    "cpv_adv_copy_forward": {
+      "name": "cpv_adv_copy_forward",
+      "role": "adversary",
+      "description": "Colluding classical adversary: copies the intercepted bit to its partner, and answers the XOR once the partner's copy arrives (Chandran et al. 2009 attack).",
+      "ports": [
+        "verifier",
+        "partner"
+      ],
+      "params": {},
+      "variables": {
+        "mine": 0
+      },
+      "initial": "intercept",
+      "states": [
+        {
+          "id": "intercept",
+          "kind": "initial",
+          "label": "Intercept bit",
+          "ui": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "forwarded",
+          "kind": "normal",
+          "label": "Await copy",
+          "ui": {
+            "x": 0,
+            "y": 130
+          }
+        },
+        {
+          "id": "done",
+          "kind": "terminal",
+          "outcome": "done",
+          "label": "Answered",
+          "ui": {
+            "x": 0,
+            "y": 260
+          }
+        }
+      ],
+      "transitions": [
+        {
+          "id": "copy",
+          "from": "intercept",
+          "to": "forwarded",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "bit"
+            ],
+            "port": "verifier"
+          },
+          "label": "copy & forward",
+          "actions": [
+            {
+              "op": "set",
+              "var": "mine",
+              "expr": "msg.value"
+            },
+            {
+              "op": "send",
+              "port": "partner",
+              "tag": "copy",
+              "value": "msg.value"
+            }
+          ]
+        },
+        {
+          "id": "answer",
+          "from": "forwarded",
+          "to": "done",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "copy"
+            ],
+            "port": "partner"
+          },
+          "label": "xor & answer",
+          "actions": [
+            {
+              "op": "send",
+              "port": "verifier",
+              "tag": "answer",
+              "value": "mine ^ msg.value"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "verification": {
+    "rule": "all",
+    "verifiers": [
+      "V0",
+      "V1"
+    ]
+  },
+  "experiments": []
+}

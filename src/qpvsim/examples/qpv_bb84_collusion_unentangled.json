@@ -1,0 +1,939 @@
+{
+  "format": "qpvsim-project",
+  "version": 1,
+  "meta": {
+    "name": "QPV_BB84 \u2014 colluding adversaries (breidbart)",
+    "description": "No prover is at the claimed position x = 0.  Adversary E0 sits between V0 and the claim, E1 between the claim and V1; they communicate classically at light speed. They share no entanglement; E0 measures the qubit with policy 'breidbart'.",
+    "protocol": {
+      "name": "QPV_BB84",
+      "version": "1.0",
+      "references": [
+        "A. Kent, W. J. Munro, T. P. Spiller, 'Quantum tagging: authenticating location via quantum information and relativistic signalling constraints', Phys. Rev. A 84, 012326 (2011); arXiv:1008.2147",
+        "H.-K. Lau, H.-K. Lo, 'Insecurity of position-based quantum-cryptography protocols against entanglement attacks', Phys. Rev. A 83, 012322 (2011); arXiv:1009.2256",
+        "H. Buhrman, N. Chandran, S. Fehr, R. Gelles, V. Goyal, R. Ostrovsky, C. Schaffner, 'Position-based quantum cryptography: impossibility and constructions', SIAM J. Comput. 43(1) (2014); arXiv:1009.2490",
+        "M. Tomamichel, S. Fehr, J. Kaniewski, S. Wehner, 'A monogamy-of-entanglement game with applications to device-independent quantum cryptography', New J. Phys. 15, 103002 (2013); arXiv:1210.4359"
+      ]
+    },
+    "assumptions": [
+      "One spatial dimension in effect: all participants lie on the x axis; signals travel on straight lines at the configured speed (default: vacuum speed of light).",
+      "Verifiers are trusted, know their own positions and the claimed position exactly, share private randomness (x, theta) established before t=0, and have synchronised clocks unless clock offsets/drift are configured.",
+      "Verifiers decide offline after the round; the final decision combines both verdicts with the rule 'all must accept'.",
+      "One simulation run = one protocol round; acceptance probabilities are estimated over many independent runs (experiments).",
+      "Adversaries control all channels between the verifiers and the claimed position.",
+      "Adversary capabilities: no pre-shared entanglement (profile 'no_entanglement')."
+    ],
+    "limitations": [
+      "Simulation results are evidence about the modelled behaviour only; they are not security proofs.",
+      "No special/general-relativistic effects beyond a finite signal speed; no clock-synchronisation protocol is modelled (offsets/drift are fixed parameters).",
+      "Qubit loss makes QPV_BB84 attackable by provers who may claim loss; this model treats a missing answer as a rejection and does not model loss-tolerant variants.",
+      "Adversary strategies are the specific automata supplied; the simulator does not search over all strategies, so observed success rates are lower bounds on what attackers can achieve."
+    ]
+  },
+  "physics": {
+    "signal_speed_mps": 299792458,
+    "allow_superluminal": false
+  },
+  "simulation": {
+    "seed": 7,
+    "backend": "density_matrix",
+    "max_time_ns": 1000,
+    "max_events": 100000,
+    "stop_when": "verifiers_decided",
+    "priorities": {}
+  },
+  "claim": {
+    "prover": null,
+    "position": [
+      0.0,
+      0.0
+    ]
+  },
+  "participants": [
+    {
+      "id": "V0",
+      "role": "verifier",
+      "label": "Verifier V0 (qubit)",
+      "position": [
+        -3.0,
+        0.0
+      ],
+      "automaton": "qpv_bb84_verifier_quantum",
+      "params": {
+        "t_ref_ns": 20.0,
+        "tolerance_ns": 0.5
+      },
+      "processing_ns": 0.0,
+      "start_ns": 0,
+      "clock": {
+        "offset_ns": 0,
+        "drift_ppm": 0
+      },
+      "capabilities": "verifier",
+      "noise": {},
+      "group": null,
+      "ui": {
+        "x": 80,
+        "y": 220
+      }
+    },
+    {
+      "id": "V1",
+      "role": "verifier",
+      "label": "Verifier V1 (basis)",
+      "position": [
+        3.0,
+        0.0
+      ],
+      "automaton": "qpv_bb84_verifier_classical",
+      "params": {
+        "t_ref_ns": 20.0,
+        "tolerance_ns": 0.5
+      },
+      "processing_ns": 0.0,
+      "start_ns": 0,
+      "clock": {
+        "offset_ns": 0,
+        "drift_ppm": 0
+      },
+      "capabilities": "verifier",
+      "noise": {},
+      "group": null,
+      "ui": {
+        "x": 900,
+        "y": 220
+      }
+    },
+    {
+      "id": "E0",
+      "role": "adversary",
+      "label": "Adversary E0",
+      "position": [
+        -1.5,
+        0.0
+      ],
+      "automaton": "qpv_bb84_adv_measure_broadcast",
+      "params": {
+        "policy": "breidbart"
+      },
+      "processing_ns": 0.0,
+      "start_ns": 0,
+      "clock": {
+        "offset_ns": 0,
+        "drift_ppm": 0
+      },
+      "capabilities": "no_entanglement",
+      "noise": {},
+      "group": "coalition",
+      "ui": {
+        "x": 330,
+        "y": 220
+      }
+    },
+    {
+      "id": "E1",
+      "role": "adversary",
+      "label": "Adversary E1",
+      "position": [
+        1.5,
+        0.0
+      ],
+      "automaton": "qpv_bb84_adv_forward_basis",
+      "params": {},
+      "processing_ns": 0.0,
+      "start_ns": 0,
+      "clock": {
+        "offset_ns": 0,
+        "drift_ppm": 0
+      },
+      "capabilities": "no_entanglement",
+      "noise": {},
+      "group": "coalition",
+      "ui": {
+        "x": 650,
+        "y": 220
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": "q0",
+      "kind": "quantum",
+      "a": {
+        "node": "V0",
+        "port": "prover"
+      },
+      "b": {
+        "node": "E0",
+        "port": "verifier"
+      },
+      "directed": false,
+      "length_m": null,
+      "speed_mps": null,
+      "latency_ns": 0,
+      "jitter_ns": 0,
+      "loss_prob": 0,
+      "attenuation_db_per_km": 0,
+      "noise": {}
+    },
+    {
+      "id": "c0",
+      "kind": "classical",
+      "a": {
+        "node": "V0",
+        "port": "prover"
+      },
+      "b": {
+        "node": "E0",
+        "port": "verifier"
+      },
+      "directed": false,
+      "length_m": null,
+      "speed_mps": null,
+      "latency_ns": 0,
+      "jitter_ns": 0,
+      "loss_prob": 0,
+      "attenuation_db_per_km": 0,
+      "noise": {}
+    },
+    {
+      "id": "c1",
+      "kind": "classical",
+      "a": {
+        "node": "V1",
+        "port": "prover"
+      },
+      "b": {
+        "node": "E1",
+        "port": "verifier"
+      },
+      "directed": false,
+      "length_m": null,
+      "speed_mps": null,
+      "latency_ns": 0,
+      "jitter_ns": 0,
+      "loss_prob": 0,
+      "attenuation_db_per_km": 0,
+      "noise": {}
+    },
+    {
+      "id": "cE",
+      "kind": "classical",
+      "a": {
+        "node": "E0",
+        "port": "partner"
+      },
+      "b": {
+        "node": "E1",
+        "port": "partner"
+      },
+      "directed": false,
+      "length_m": null,
+      "speed_mps": null,
+      "latency_ns": 0,
+      "jitter_ns": 0,
+      "loss_prob": 0,
+      "attenuation_db_per_km": 0,
+      "noise": {}
+    }
+  ],
+  "resources": [
+    {
+      "id": "vshared",
+      "type": "shared_random",
+      "holders": [
+        "V0",
+        "V1"
+      ],
+      "vars": {
+        "x": "rand_bit()",
+        "theta": "rand_bit()"
+      }
+    }
+  ],
+  "automata": {
+    "qpv_bb84_verifier_quantum": {
+      "name": "qpv_bb84_verifier_quantum",
+      "role": "verifier",
+      "description": "QPV_BB84 verifier that sends the BB84 qubit H^theta|x>. Accepts iff the answer equals x and arrives by the deadline t_ref + d(V, claim)/c + tolerance (local clock).",
+      "ports": [
+        "prover"
+      ],
+      "params": {
+        "t_ref_ns": {
+          "default": 20.0,
+          "description": "Agreed time at which both challenges reach the claimed position."
+        },
+        "tolerance_ns": {
+          "default": 0.5,
+          "description": "Allowed processing time of the prover (deadline slack)."
+        }
+      },
+      "variables": {
+        "x": 0,
+        "theta": 0,
+        "send_at": 0.0,
+        "deadline": 0.0,
+        "sent_at": 0.0
+      },
+      "initial": "idle",
+      "states": [
+        {
+          "id": "idle",
+          "kind": "initial",
+          "label": "Idle",
+          "ui": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "armed",
+          "kind": "normal",
+          "label": "Armed",
+          "ui": {
+            "x": 0,
+            "y": 120
+          },
+          "description": "Waiting for the emission instant."
+        },
+        {
+          "id": "waiting",
+          "kind": "normal",
+          "label": "Awaiting answer",
+          "ui": {
+            "x": 0,
+            "y": 240
+          }
+        },
+        {
+          "id": "accepted",
+          "kind": "terminal",
+          "outcome": "accept",
+          "label": "Accept",
+          "ui": {
+            "x": -160,
+            "y": 380
+          }
+        },
+        {
+          "id": "rejected",
+          "kind": "terminal",
+          "outcome": "reject",
+          "label": "Reject",
+          "ui": {
+            "x": 160,
+            "y": 380
+          }
+        }
+      ],
+      "transitions": [
+        {
+          "id": "arm",
+          "from": "idle",
+          "to": "armed",
+          "trigger": {
+            "type": "start"
+          },
+          "label": "schedule challenge",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "set",
+              "var": "send_at",
+              "expr": "fs_round(t_ref_ns - claim_travel_ns)"
+            },
+            {
+              "op": "set",
+              "var": "deadline",
+              "expr": "fs_round(t_ref_ns + claim_travel_ns + tolerance_ns)"
+            },
+            {
+              "op": "timer",
+              "name": "emit",
+              "at_ns": "send_at"
+            }
+          ]
+        },
+        {
+          "id": "emit",
+          "from": "armed",
+          "to": "waiting",
+          "trigger": {
+            "type": "timer",
+            "name": "emit"
+          },
+          "label": "send challenge",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "prepare_bb84",
+              "qubit": "q",
+              "bit": "x",
+              "basis": "theta"
+            },
+            {
+              "op": "send_qubit",
+              "port": "prover",
+              "tag": "q",
+              "qubit": "q"
+            },
+            {
+              "op": "set",
+              "var": "sent_at",
+              "expr": "now"
+            },
+            {
+              "op": "record",
+              "key": "challenge_sent_ns",
+              "value": "now"
+            },
+            {
+              "op": "record",
+              "key": "deadline_ns",
+              "value": "deadline"
+            },
+            {
+              "op": "timer",
+              "name": "deadline",
+              "at_ns": "deadline"
+            }
+          ]
+        },
+        {
+          "id": "accept",
+          "from": "waiting",
+          "to": "accepted",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "answer"
+            ],
+            "port": "prover"
+          },
+          "guard": "msg.value == x and msg.time <= deadline",
+          "label": "correct & on time",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "cancel_timer",
+              "name": "deadline"
+            },
+            {
+              "op": "record",
+              "key": "response_ns",
+              "value": "msg.time"
+            },
+            {
+              "op": "record",
+              "key": "rtt_ns",
+              "value": "msg.time - sent_at"
+            },
+            {
+              "op": "verdict",
+              "outcome": "accept",
+              "reason": "'correct answer ' + str(msg.value) + ' received at ' + str(round(msg.time, 6)) + ' ns <= deadline ' + str(round(deadline, 6)) + ' ns'"
+            }
+          ]
+        },
+        {
+          "id": "wrong",
+          "from": "waiting",
+          "to": "rejected",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "answer"
+            ],
+            "port": "prover"
+          },
+          "label": "wrong answer",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "cancel_timer",
+              "name": "deadline"
+            },
+            {
+              "op": "record",
+              "key": "response_ns",
+              "value": "msg.time"
+            },
+            {
+              "op": "record",
+              "key": "rtt_ns",
+              "value": "msg.time - sent_at"
+            },
+            {
+              "op": "verdict",
+              "outcome": "reject",
+              "reason": "'wrong answer ' + str(msg.value) + ' (expected ' + str(x) + ')'"
+            }
+          ]
+        },
+        {
+          "id": "timeout",
+          "from": "waiting",
+          "to": "rejected",
+          "trigger": {
+            "type": "timer",
+            "name": "deadline"
+          },
+          "label": "deadline passed",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "verdict",
+              "outcome": "reject",
+              "reason": "'no answer by the deadline ' + str(round(deadline, 6)) + ' ns'"
+            }
+          ]
+        }
+      ]
+    },
+    "qpv_bb84_verifier_classical": {
+      "name": "qpv_bb84_verifier_classical",
+      "role": "verifier",
+      "description": "QPV_BB84 verifier that sends the basis bit theta classically. Accepts iff the answer equals x and arrives by the deadline t_ref + d(V, claim)/c + tolerance (local clock).",
+      "ports": [
+        "prover"
+      ],
+      "params": {
+        "t_ref_ns": {
+          "default": 20.0,
+          "description": "Agreed time at which both challenges reach the claimed position."
+        },
+        "tolerance_ns": {
+          "default": 0.5,
+          "description": "Allowed processing time of the prover (deadline slack)."
+        }
+      },
+      "variables": {
+        "x": 0,
+        "theta": 0,
+        "send_at": 0.0,
+        "deadline": 0.0,
+        "sent_at": 0.0
+      },
+      "initial": "idle",
+      "states": [
+        {
+          "id": "idle",
+          "kind": "initial",
+          "label": "Idle",
+          "ui": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "armed",
+          "kind": "normal",
+          "label": "Armed",
+          "ui": {
+            "x": 0,
+            "y": 120
+          },
+          "description": "Waiting for the emission instant."
+        },
+        {
+          "id": "waiting",
+          "kind": "normal",
+          "label": "Awaiting answer",
+          "ui": {
+            "x": 0,
+            "y": 240
+          }
+        },
+        {
+          "id": "accepted",
+          "kind": "terminal",
+          "outcome": "accept",
+          "label": "Accept",
+          "ui": {
+            "x": -160,
+            "y": 380
+          }
+        },
+        {
+          "id": "rejected",
+          "kind": "terminal",
+          "outcome": "reject",
+          "label": "Reject",
+          "ui": {
+            "x": 160,
+            "y": 380
+          }
+        }
+      ],
+      "transitions": [
+        {
+          "id": "arm",
+          "from": "idle",
+          "to": "armed",
+          "trigger": {
+            "type": "start"
+          },
+          "label": "schedule challenge",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "set",
+              "var": "send_at",
+              "expr": "fs_round(t_ref_ns - claim_travel_ns)"
+            },
+            {
+              "op": "set",
+              "var": "deadline",
+              "expr": "fs_round(t_ref_ns + claim_travel_ns + tolerance_ns)"
+            },
+            {
+              "op": "timer",
+              "name": "emit",
+              "at_ns": "send_at"
+            }
+          ]
+        },
+        {
+          "id": "emit",
+          "from": "armed",
+          "to": "waiting",
+          "trigger": {
+            "type": "timer",
+            "name": "emit"
+          },
+          "label": "send challenge",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "send",
+              "port": "prover",
+              "tag": "theta",
+              "value": "theta"
+            },
+            {
+              "op": "set",
+              "var": "sent_at",
+              "expr": "now"
+            },
+            {
+              "op": "record",
+              "key": "challenge_sent_ns",
+              "value": "now"
+            },
+            {
+              "op": "record",
+              "key": "deadline_ns",
+              "value": "deadline"
+            },
+            {
+              "op": "timer",
+              "name": "deadline",
+              "at_ns": "deadline"
+            }
+          ]
+        },
+        {
+          "id": "accept",
+          "from": "waiting",
+          "to": "accepted",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "answer"
+            ],
+            "port": "prover"
+          },
+          "guard": "msg.value == x and msg.time <= deadline",
+          "label": "correct & on time",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "cancel_timer",
+              "name": "deadline"
+            },
+            {
+              "op": "record",
+              "key": "response_ns",
+              "value": "msg.time"
+            },
+            {
+              "op": "record",
+              "key": "rtt_ns",
+              "value": "msg.time - sent_at"
+            },
+            {
+              "op": "verdict",
+              "outcome": "accept",
+              "reason": "'correct answer ' + str(msg.value) + ' received at ' + str(round(msg.time, 6)) + ' ns <= deadline ' + str(round(deadline, 6)) + ' ns'"
+            }
+          ]
+        },
+        {
+          "id": "wrong",
+          "from": "waiting",
+          "to": "rejected",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "answer"
+            ],
+            "port": "prover"
+          },
+          "label": "wrong answer",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "cancel_timer",
+              "name": "deadline"
+            },
+            {
+              "op": "record",
+              "key": "response_ns",
+              "value": "msg.time"
+            },
+            {
+              "op": "record",
+              "key": "rtt_ns",
+              "value": "msg.time - sent_at"
+            },
+            {
+              "op": "verdict",
+              "outcome": "reject",
+              "reason": "'wrong answer ' + str(msg.value) + ' (expected ' + str(x) + ')'"
+            }
+          ]
+        },
+        {
+          "id": "timeout",
+          "from": "waiting",
+          "to": "rejected",
+          "trigger": {
+            "type": "timer",
+            "name": "deadline"
+          },
+          "label": "deadline passed",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "verdict",
+              "outcome": "reject",
+              "reason": "'no answer by the deadline ' + str(round(deadline, 6)) + ' ns'"
+            }
+          ]
+        }
+      ]
+    },
+    "qpv_bb84_adv_measure_broadcast": {
+      "name": "qpv_bb84_adv_measure_broadcast",
+      "role": "adversary",
+      "description": "Colluding adversary near the qubit-sending verifier (no entanglement). Measures the intercepted qubit immediately with the configured policy, sends the outcome to its partner, and answers the outcome once theta arrives from the partner (simultaneous-message model).",
+      "ports": [
+        "verifier",
+        "partner"
+      ],
+      "params": {
+        "policy": {
+          "default": "breidbart",
+          "description": "breidbart | Z | X | random (basis choice for measuring the qubit)"
+        }
+      },
+      "variables": {
+        "m": 0
+      },
+      "initial": "intercept",
+      "states": [
+        {
+          "id": "intercept",
+          "kind": "initial",
+          "label": "Intercept qubit",
+          "ui": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "measured",
+          "kind": "normal",
+          "label": "Await theta",
+          "ui": {
+            "x": 0,
+            "y": 130
+          }
+        },
+        {
+          "id": "done",
+          "kind": "terminal",
+          "outcome": "done",
+          "label": "Answered",
+          "ui": {
+            "x": 0,
+            "y": 260
+          }
+        }
+      ],
+      "transitions": [
+        {
+          "id": "measure",
+          "from": "intercept",
+          "to": "measured",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "q"
+            ],
+            "port": "verifier"
+          },
+          "label": "measure & broadcast",
+          "actions": [
+            {
+              "op": "measure",
+              "qubit": "q",
+              "basis": "'angle' if policy == 'breidbart' else (rand_choice(['Z', 'X']) if policy == 'random' else policy)",
+              "angle": "pi / 8",
+              "result": "m"
+            },
+            {
+              "op": "send",
+              "port": "partner",
+              "tag": "m",
+              "value": "m"
+            }
+          ]
+        },
+        {
+          "id": "answer",
+          "from": "measured",
+          "to": "done",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "theta"
+            ],
+            "port": "partner"
+          },
+          "label": "answer",
+          "actions": [
+            {
+              "op": "send",
+              "port": "verifier",
+              "tag": "answer",
+              "value": "m"
+            }
+          ]
+        }
+      ]
+    },
+    "qpv_bb84_adv_forward_basis": {
+      "name": "qpv_bb84_adv_forward_basis",
+      "role": "adversary",
+      "description": "Colluding adversary near the classical verifier (no entanglement): forwards theta to its partner and answers with the partner's measurement outcome.",
+      "ports": [
+        "verifier",
+        "partner"
+      ],
+      "params": {},
+      "variables": {},
+      "initial": "intercept",
+      "states": [
+        {
+          "id": "intercept",
+          "kind": "initial",
+          "label": "Intercept theta",
+          "ui": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "forwarded",
+          "kind": "normal",
+          "label": "Await outcome",
+          "ui": {
+            "x": 0,
+            "y": 130
+          }
+        },
+        {
+          "id": "done",
+          "kind": "terminal",
+          "outcome": "done",
+          "label": "Answered",
+          "ui": {
+            "x": 0,
+            "y": 260
+          }
+        }
+      ],
+      "transitions": [
+        {
+          "id": "forward",
+          "from": "intercept",
+          "to": "forwarded",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "theta"
+            ],
+            "port": "verifier"
+          },
+          "label": "forward theta",
+          "actions": [
+            {
+              "op": "send",
+              "port": "partner",
+              "tag": "theta",
+              "value": "msg.value"
+            }
+          ]
+        },
+        {
+          "id": "answer",
+          "from": "forwarded",
+          "to": "done",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "m"
+            ],
+            "port": "partner"
+          },
+          "label": "answer",
+          "actions": [
+            {
+              "op": "send",
+              "port": "verifier",
+              "tag": "answer",
+              "value": "msg.value"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "verification": {
+    "rule": "all",
+    "verifiers": [
+      "V0",
+      "V1"
+    ]
+  },
+  "experiments": [
+    {
+      "id": "strategies",
+      "name": "Unentangled strategies compared",
+      "runs": 2000,
+      "seed": 21,
+      "sweep": [
+        {
+          "path": "participants.E0.params.policy",
+          "values": [
+            "breidbart",
+            "Z",
+            "X",
+            "random"
+          ]
+        }
+      ]
+    }
+  ]
+}
