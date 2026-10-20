@@ -43,7 +43,9 @@ def wilson(k: int, n: int, z: float = Z95) -> Dict[str, float]:
     den = 1 + z * z / n
     centre = (p + z * z / (2 * n)) / den
     half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den
-    return {"p": p, "lo": max(0.0, centre - half), "hi": min(1.0, centre + half)}
+    lo = 0.0 if k == 0 else max(0.0, centre - half)
+    hi = 1.0 if k == n else min(1.0, centre + half)
+    return {"p": p, "lo": lo, "hi": hi}
 
 
 def run_seed(master: int, point: int, i: int) -> int:
