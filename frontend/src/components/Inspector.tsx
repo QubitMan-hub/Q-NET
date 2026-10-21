@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
 import { api } from "../api";
 import { nsLabel, short } from "../format";
-import type { Action, AutomatonSpec, Issue, LinkSpec, ParticipantSpec, Project, Role, StateSpec, TransitionSpec } from "../types";
-import { Check, Field, NumberInput, Section, Select, TextArea, TextInput, Icon } from "./ui";
+import type { Action, AutomatonSpec, Issue, LinkSpec, ParticipantSpec, Project, Role, StateSpec, TransitionSpec, VerifierType } from "../types";
+import { Advanced, Check, Field, NumberInput, Section, Select, TextArea, TextInput, Icon } from "./ui";
+import { GLOSSARY } from "../glossary";
 import { deleteSelection, duplicateParticipant, ensureAutomaton } from "../editing";
 
 function JsonField({ value, onCommit, rows = 3 }: { value: any; onCommit: (v: any) => void; rows?: number }) {
@@ -142,6 +143,7 @@ function ParticipantInspector({ p, project }: { p: ParticipantSpec; project: Pro
   const spec: AutomatonSpec | undefined = project.automata[p.automaton];
   const capsProfile = typeof p.capabilities === "string" ? p.capabilities : p.capabilities?.profile ?? "unrestricted";
   const capsOverrides = typeof p.capabilities === "string" ? {} : Object.fromEntries(Object.entries(p.capabilities).filter(([k]) => k !== "profile"));
+  const vtype: VerifierType = p.verifier_type ?? useStore.getState().verifierTypes[p.id] ?? "classical";
   return (
     <>
       <Section title={<><span className={`swatch ${p.role}`} style={{ display: "inline-block", marginRight: 6 }} />Participant {p.id}</>} aside={
@@ -160,22 +162,34 @@ function ParticipantInspector({ p, project }: { p: ParticipantSpec; project: Pro
           if (d.claim.prover === p.id) d.claim.prover = id;
         }, { select: { kind: "participant", id: v.trim() } })} /></Field>
         <Field label="Label"><TextInput value={p.label} onCommit={(v) => upd((q) => { q.label = v; })} /></Field>
-        <Field label="Role">
+        <Field label="Role" title={GLOSSARY[p.role]}>
           <Select<Role> value={p.role} options={["verifier", "prover", "adversary", "other"]} onChange={(v) => upd((q) => { q.role = v; })} />
         </Field>
+        {p.role === "verifier" && (
+          <Field label="Verifier type" title={GLOSSARY[`${vtype}_verifier`]}>
+            <Select<VerifierType> value={vtype} options={[{ value: "quantum", label: "quantum (sends the qubit)" }, { value: "classical", label: "classical (sends a basis share)" }]}
+              onChange={(v) => edit((d) => {
+                const q = d.participants.find((x) => x.id === p.id)!;
+                q.verifier_type = v;
+                if (q.automaton.startsWith("qpv_verifier_") && ensureAutomaton(d, `qpv_verifier_${v}`)) q.automaton = `qpv_verifier_${v}`;
+              })} />
+          </Field>
+        )}
         <Field label="Position x, y (m)">
           <div className="row">
             <NumberInput value={p.position[0] ?? 0} step={0.1} ariaLabel="x position" onCommit={(v) => upd((q) => { q.position[0] = v ?? 0; })} />
             <NumberInput value={p.position[1] ?? 0} step={0.1} ariaLabel="y position" onCommit={(v) => upd((q) => { q.position[1] = v ?? 0; })} />
           </div>
         </Field>
-        <Field label="Processing (ns)" title="Default duration of each transition (computation time)">
+        <Field label="Processing (ns)" title={GLOSSARY.processing}>
           <NumberInput value={p.processing_ns} step={0.05} min={0} onCommit={(v) => upd((q) => { q.processing_ns = v ?? 0; })} />
         </Field>
-        <Field label="Start at (ns)"><NumberInput value={p.start_ns} step={1} min={0} onCommit={(v) => upd((q) => { q.start_ns = v ?? 0; })} /></Field>
-        <Field label="Clock offset (ns)"><NumberInput value={p.clock.offset_ns} step={0.1} onCommit={(v) => upd((q) => { q.clock.offset_ns = v ?? 0; })} /></Field>
-        <Field label="Clock drift (ppm)"><NumberInput value={p.clock.drift_ppm} step={1} onCommit={(v) => upd((q) => { q.clock.drift_ppm = v ?? 0; })} /></Field>
-        <Field label="Coalition"><TextInput value={p.group ?? ""} placeholder="none" onCommit={(v) => upd((q) => { q.group = v || null; })} /></Field>
+        <Advanced>
+          <Field label="Start at (ns)"><NumberInput value={p.start_ns} step={1} min={0} onCommit={(v) => upd((q) => { q.start_ns = v ?? 0; })} /></Field>
+          <Field label="Clock offset (ns)" title={GLOSSARY.clock}><NumberInput value={p.clock.offset_ns} step={0.1} onCommit={(v) => upd((q) => { q.clock.offset_ns = v ?? 0; })} /></Field>
+          <Field label="Clock drift (ppm)" title={GLOSSARY.clock}><NumberInput value={p.clock.drift_ppm} step={1} onCommit={(v) => upd((q) => { q.clock.drift_ppm = v ?? 0; })} /></Field>
+          <Field label="Coalition"><TextInput value={p.group ?? ""} placeholder="none" onCommit={(v) => upd((q) => { q.group = v || null; })} /></Field>
+        </Advanced>
       </Section>
       <Section title="Strategy (automaton)" aside={<button className="btn ghost" onClick={() => setView("automaton")}>Open</button>}>
         <Field label="Automaton">
@@ -186,28 +200,29 @@ function ParticipantInspector({ p, project }: { p: ParticipantSpec; project: Pro
         </Field>
         {spec?.description && <div className="note" style={{ marginBottom: 6 }}>{spec.description}</div>}
         {Object.entries(spec?.params ?? {}).map(([k, d]) => (
-          <Field key={k} label={k} title={d.description}>
+          <Field key={k} label={k} title={(GLOSSARY as Record<string, string>)[k.replace(/_ns$/, "")] ?? d.description}>
             <TextInput code value={JSON.stringify(p.params[k] ?? d.default)}
               onCommit={(v) => upd((q) => { q.params[k] = parseLiteral(v); })} />
           </Field>
         ))}
       </Section>
       <Section title="Capabilities" aside={<span className="xs muted">enforced at run time</span>}>
-        <Field label="Profile">
+        <Field label="Profile" title={GLOSSARY.capabilities}>
           <Select value={capsProfile} options={Object.keys(meta?.profiles ?? { unrestricted: 1 })}
             onChange={(v) => upd((q) => { q.capabilities = Object.keys(capsOverrides).length ? { profile: v, ...capsOverrides } : v; })} />
         </Field>
         <div className="note" style={{ marginBottom: 6 }}>{meta?.profiles?.[capsProfile]?.description}</div>
-        <Field label="Overrides" stack title='e.g. {"max_qubits": 1, "min_processing_ns": 0.3}'>
-          <JsonField value={capsOverrides} rows={2} onCommit={(v) => upd((q) => { q.capabilities = Object.keys(v).length ? { profile: capsProfile, ...v } : capsProfile; })} />
-        </Field>
-      </Section>
-      <Section title="Local noise">
-        {(["measurement_flip", "gate_depolarizing", "memory_t1_ns", "memory_t2_ns"] as const).map((k) => (
-          <Field key={k} label={k.replace(/_/g, " ")}>
-            <NumberInput value={p.noise[k] ?? null} allowNull nullLabel="off" min={0} onCommit={(v) => upd((q) => { if (v === null) delete q.noise[k]; else q.noise[k] = v; })} />
+        <Advanced>
+          <Field label="Overrides" stack title='e.g. {"max_qubits": 1, "min_processing_ns": 0.3}'>
+            <JsonField value={capsOverrides} rows={2} onCommit={(v) => upd((q) => { q.capabilities = Object.keys(v).length ? { profile: capsProfile, ...v } : capsProfile; })} />
           </Field>
-        ))}
+          <div className="small muted" style={{ margin: "6px 0 2px" }}>Local noise</div>
+          {(["measurement_flip", "gate_depolarizing", "memory_t1_ns", "memory_t2_ns"] as const).map((k) => (
+            <Field key={k} label={k.replace(/_/g, " ")}>
+              <NumberInput value={p.noise[k] ?? null} allowNull nullLabel="off" min={0} onCommit={(v) => upd((q) => { if (v === null) delete q.noise[k]; else q.noise[k] = v; })} />
+            </Field>
+          ))}
+        </Advanced>
       </Section>
       {live && (
         <Section title="Runtime" aside={<span className="xs muted">engine state</span>}>
@@ -278,14 +293,17 @@ function LinkInspector({ id, project }: { id: string; project: Project }) {
         </div>}
         <Field label="Length (m)" title="Empty = straight-line distance between the endpoints"><NumberInput value={l.length_m} allowNull nullLabel="straight line" min={0} onCommit={(v) => upd((x) => { x.length_m = v; })} /></Field>
         <Field label="Speed (m/s)" title="Empty = project signal speed"><NumberInput value={l.speed_mps} allowNull nullLabel="project speed" min={0} onCommit={(v) => upd((x) => { x.speed_mps = v; })} /></Field>
-        <Field label="Latency (ns)"><NumberInput value={l.latency_ns} min={0} step={0.1} onCommit={(v) => upd((x) => { x.latency_ns = v ?? 0; })} /></Field>
-        <Field label="Jitter (ns)"><NumberInput value={l.jitter_ns} min={0} step={0.1} onCommit={(v) => upd((x) => { x.jitter_ns = v ?? 0; })} /></Field>
+        <Advanced>
+          <Field label="Latency (ns)" title={GLOSSARY.latency}><NumberInput value={l.latency_ns} min={0} step={0.1} onCommit={(v) => upd((x) => { x.latency_ns = v ?? 0; })} /></Field>
+          <Field label="Jitter (ns)"><NumberInput value={l.jitter_ns} min={0} step={0.1} onCommit={(v) => upd((x) => { x.jitter_ns = v ?? 0; })} /></Field>
+          <Field label="Loss probability"><NumberInput value={l.loss_prob} min={0} max={1} step={0.05} onCommit={(v) => upd((x) => { x.loss_prob = v ?? 0; })} /></Field>
+          <Field label="Attenuation (dB/km)"><NumberInput value={l.attenuation_db_per_km} min={0} step={0.1} onCommit={(v) => upd((x) => { x.attenuation_db_per_km = v ?? 0; })} /></Field>
+        </Advanced>
       </Section>
-      <Section title="Loss and noise">
-        <Field label="Loss probability"><NumberInput value={l.loss_prob} min={0} max={1} step={0.05} onCommit={(v) => upd((x) => { x.loss_prob = v ?? 0; })} /></Field>
-        <Field label="Attenuation (dB/km)"><NumberInput value={l.attenuation_db_per_km} min={0} step={0.1} onCommit={(v) => upd((x) => { x.attenuation_db_per_km = v ?? 0; })} /></Field>
+      <Section title="Noise">
+        {l.kind === "classical" && <div className="note">Classical channels carry bits exactly; noise applies to quantum channels.</div>}
         {l.kind === "quantum" && (["depolarizing", "dephasing", "bitflip", "amplitude_damping"] as const).map((k) => (
-          <Field key={k} label={k.replace("_", " ")}>
+          <Field key={k} label={k.replace("_", " ")} title={k === "depolarizing" ? GLOSSARY.depolarizing : undefined}>
             <NumberInput value={l.noise[k] ?? null} allowNull nullLabel="off" min={0} max={1} step={0.05} onCommit={(v) => upd((x) => { if (v === null) delete x.noise[k]; else x.noise[k] = v; })} />
           </Field>
         ))}

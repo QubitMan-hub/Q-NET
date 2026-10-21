@@ -20,8 +20,9 @@ export interface AutomatonSpec {
   params?: Record<string, { default?: any; description?: string; type?: string }>;
   variables?: Record<string, any>; initial: string; states: StateSpec[]; transitions: TransitionSpec[];
 }
+export type VerifierType = "quantum" | "classical";
 export interface ParticipantSpec {
-  id: string; role: Role; label: string; position: number[]; automaton: string;
+  id: string; role: Role; label: string; position: number[]; automaton: string; verifier_type?: VerifierType;
   params: Record<string, any>; processing_ns: number; start_ns: number;
   clock: { offset_ns: number; drift_ppm: number }; capabilities: string | Record<string, any>;
   noise: Record<string, number>; group: string | null; ui: { x?: number; y?: number };
@@ -49,6 +50,31 @@ export interface Project {
 }
 export interface Issue { level: "error" | "warning"; path: string; message: string }
 
+/** Link kinds each participant port carries, from the engine (`port_kinds`). */
+export type PortKinds = Record<string, Record<string, LinkKind[]>>;
+
+export interface TimingRow {
+  id: string; type: VerifierType; position: number[]; distance_m: number; send_fs: number; at_claim_fs: number;
+  deadline_fs: number; honest_answer_fs: number; answer_fs: number | null; slack_fs: number; inconsistent: string[];
+}
+export interface Reference { value: number; label: string; source: string }
+export interface Analysis {
+  dimension: number; qpv: boolean; timing: { rows: TimingRow[]; issues: string[] };
+  references: Record<string, Reference>; default_tau_ns: number;
+}
+export interface ReadyScenario { id: string; label: string; args: Record<string, any> }
+export interface ScenarioCatalog {
+  ready: ReadyScenario[]; answerers: Record<string, string>; provers: string[]; attacks: string[];
+  policies: string[]; combines: string[]; presets: Record<string, { label: string; unit: string; range?: number[]; values?: string[] }>;
+}
+export interface LightPoint {
+  point: number[]; tau_ns: number; slack_fs: number; binding: string; can_answer: boolean; reason: string | null;
+  per_verifier: { id: string; arrival_fs: number; deadline_fs: number; slack_fs: number }[];
+}
+export interface LightGrid { bounds: number[][]; n: number; z: number; tau_ns: number; reason: string | null; slack_ns: number[][] }
+export type Ref = { kind: "message"; id: number } | { kind: "event"; seq: number } | { kind: "participant"; id: string }
+  | { kind: "transition"; automaton: string; id: string };
+
 export interface TraceRecord {
   seq: number; time_fs: number; time_ns: number; kind: string; node: string | null;
   event: number | null; data: Record<string, any>; explain: string;
@@ -73,7 +99,7 @@ export interface NodeState {
 export interface PendingEvent { id: number; time_fs: number; priority: number; seq: number; kind: string; node: string | null; label: string; cause: number | null; scheduled_at_fs: number }
 export interface Decision {
   outcome: "accept" | "reject" | "pending"; rule: string; rule_text: string; accepts: number;
-  verifiers: any[]; complete: boolean; summary: string; explanation: string[];
+  verifiers: any[]; complete: boolean; summary: string; explanation: string[]; sentences: string[];
 }
 export interface SimState {
   now_fs: number; stopped: boolean; stop_reason: string | null; seed: number; events_executed: number;

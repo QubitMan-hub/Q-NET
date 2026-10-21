@@ -200,6 +200,12 @@ code, .mono { font-family: var(--font-code); font-size: 0.92em; font-variant-num
 .swatch.prover { background: var(--prover); }
 .swatch.adversary { background: var(--adversary); }
 .swatch.other { background: var(--other); }
+.advanced { margin-top: 6px; }
+.advanced > summary { cursor: pointer; font-size: var(--fs-s); color: var(--ink-3); padding: 2px 0; }
+.advanced > summary:hover { color: var(--ink); }
+.advanced > div { padding-top: 4px; }
+.swatch.verifier.vq { background: linear-gradient(135deg, var(--verifier) 50%, var(--quantum) 50%); }
+.swatch.verifier.vc { background: linear-gradient(135deg, var(--verifier) 50%, var(--classical) 50%); }
 .chan { width: 22px; height: 0; flex: none; }
 .chan.quantum { border-top: 3px double var(--quantum); }
 .chan.classical { border-top: 2px dashed var(--classical); }
@@ -229,6 +235,13 @@ code, .mono { font-family: var(--font-code); font-size: 0.92em; font-variant-num
 .p-node.prover .stripe { background: var(--prover); }
 .p-node.adversary .stripe { background: var(--adversary); }
 .p-node.other .stripe { background: var(--other); }
+/* quantum and classical verifiers: the verifier colour plus the colour of the signal they send */
+.p-node.v-quantum .stripe { background: linear-gradient(var(--verifier) 55%, var(--quantum) 55%); }
+.p-node.v-classical .stripe { background: linear-gradient(var(--verifier) 55%, var(--classical) 55%); }
+.p-node .vtype { display: inline-flex; width: 14px; height: 14px; flex: none; }
+.p-node .vtype svg { width: 14px; height: 14px; }
+.p-node.v-quantum .vtype { color: var(--quantum); }
+.p-node.v-classical .vtype { color: var(--classical); }
 .p-node .body { padding: 5px 8px 7px 10px; display: grid; gap: 2px; }
 .p-node .kv { display: flex; justify-content: space-between; gap: 10px; color: var(--ink-2); }
 .p-node .kv b { font-weight: 500; color: var(--ink); }
@@ -242,6 +255,16 @@ code, .mono { font-family: var(--font-code); font-size: 0.92em; font-variant-num
 .port-label { position: absolute; font-size: 10px; color: var(--ink-3); font-family: var(--font-code); white-space: nowrap; pointer-events: none; }
 .react-flow__handle.port { width: 9px; height: 9px; background: var(--panel); border: 1.5px solid var(--ink-2); }
 .react-flow__handle.port:hover { background: var(--focus); }
+.react-flow__handle.port.k-quantum { border-color: var(--quantum); }
+.react-flow__handle.port.k-classical { border-color: var(--classical); border-style: dashed; }
+.react-flow__handle.port.k-both { border-color: var(--quantum) var(--classical) var(--classical) var(--quantum); }
+.port-label.missing { color: var(--reject); font-weight: 600; pointer-events: auto; cursor: help; }
+.link-tip {
+  position: absolute; z-index: 10; pointer-events: none; background: var(--panel); border: 1px solid var(--rule-strong);
+  border-radius: var(--r-m); padding: 6px 9px; font-size: var(--fs-xs); color: var(--ink-2); line-height: 1.5;
+  white-space: nowrap; box-shadow: 0 2px 8px rgba(24, 34, 47, 0.12);
+}
+.link-tip b { color: var(--ink); font-family: var(--font-code); }
 .edge-label {
   position: absolute; font-size: 10px; font-family: var(--font-code); background: var(--panel); padding: 0 4px;
   border: 1px solid var(--rule); border-radius: 3px; pointer-events: all; cursor: pointer; white-space: nowrap; color: var(--ink-2);

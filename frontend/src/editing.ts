@@ -4,7 +4,7 @@
 
 import { useStore } from "./store";
 import { clone, uniqueId } from "./format";
-import type { AutomatonSpec, Project, Role } from "./types";
+import type { AutomatonSpec, Project, Role, VerifierType } from "./types";
 
 export function blankAutomaton(name: string, role: Role): AutomatonSpec {
   return {
@@ -26,12 +26,17 @@ export function ensureAutomaton(p: Project, name: string): boolean {
   return true;
 }
 
-export function addParticipant(role: Role, ui: { x: number; y: number }) {
+/** Add a participant; verifiers are typed (quantum sends the qubit, classical a basis share). */
+export function addParticipant(role: Role, ui: { x: number; y: number }, verifierType?: VerifierType) {
   const s = useStore.getState();
   const prefix = { verifier: "V", prover: "P", adversary: "E", other: "N" }[role];
   const id = uniqueId(prefix, s.project!.participants.map((p) => p.id));
   s.edit((p) => {
-    let automaton = Object.values(p.automata).find((a) => a.role === role)?.name;
+    const verifiers = p.participants.filter((q) => q.role === "verifier").length;
+    // a typed verifier runs its QPV automaton; a prover is sized to the verifiers present
+    const preferred = verifierType ? `qpv_verifier_${verifierType}` : role === "prover" ? `qpv_prover_${Math.max(2, verifiers)}v` : null;
+    let automaton = preferred && ensureAutomaton(p, preferred) ? preferred
+      : Object.values(p.automata).find((a) => a.role === role)?.name;
     if (!automaton) {
       const lib: Record<string, AutomatonSpec> = s.meta?.automata ?? {};
       automaton = Object.values(lib).find((a) => a.role === role && ensureAutomaton(p, a.name))?.name;
@@ -42,6 +47,7 @@ export function addParticipant(role: Role, ui: { x: number; y: number }) {
     }
     p.participants.push({
       id, role, label: id, position: [0, 0], automaton, params: {}, processing_ns: 0, start_ns: 0,
+      ...(verifierType ? { verifier_type: verifierType } : {}),
       clock: { offset_ns: 0, drift_ppm: 0 }, capabilities: s.meta?.role_profiles?.[role] ?? "unrestricted", noise: {}, group: null,
       ui: { x: Math.round(ui.x), y: Math.round(ui.y) },
     });

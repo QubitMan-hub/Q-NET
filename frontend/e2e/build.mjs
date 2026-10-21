@@ -39,11 +39,16 @@ async function drop(label, x, y) {
   await page.dispatchEvent(".canvas-wrap", "drop", { dataTransfer: dt, clientX: x, clientY: y });
   await settle();
 }
-await drop("Verifier", 420, 330);
-await drop("Verifier", 1050, 330);
+await drop("Quantum verifier", 420, 330);
+await drop("Classical verifier", 1050, 330);
 await drop("Prover", 740, 330);
 let proj = (await api("/api/project")).project;
 check(proj.participants.map((p) => p.id).join(",") === "V,V2,P", `dropped participants exist in the engine (${proj.participants.map((p) => p.id)})`);
+check(proj.participants.map((p) => `${p.verifier_type ?? "-"}:${p.automaton}`).join(",")
+  === "quantum:qpv_verifier_quantum,classical:qpv_verifier_classical,-:qpv_prover_2v", "palette adds typed verifiers and a matching prover");
+check(await page.locator('[data-testid="node-V"] .vtype').count() === 1 && await page.locator('[data-testid="node-V2"] .vtype').count() === 1,
+  "quantum and classical verifiers show their type icon");
+check(await page.locator('[data-testid="node-P"] .port-label.missing').count() === 2, "the prover's unconnected ports are flagged");
 
 // --- configure through the inspector
 async function selectNode(id) { await page.click(`[data-testid="node-${id}"] .head`); await page.waitForTimeout(150); }
@@ -61,8 +66,6 @@ await selectNode("V2");
 await page.locator('[data-testid="inspector"] input[aria-label="x position"]').fill("3");
 await page.locator('[data-testid="inspector"] input[aria-label="x position"]').press("Enter");
 await settle();
-await page.locator('[data-testid="inspector"] .field:has(> label:text-is("Automaton")) select').selectOption("qpv_verifier_classical");
-await settle();
 await selectNode("P");
 await setField("Processing (ns)", 0.2);
 
@@ -79,12 +82,16 @@ async function connect(a, ap, b, bp) {
   await settle();
 }
 await connect("V", "prover", "P", "v0");
+await connect("V", "prover", "P", "v0");
+check((await api("/api/project")).project.links.length === 1 && (await page.textContent(".toast")).includes("already have a quantum link"),
+  "a second identical link is refused with an explanation");
+await connect("V2", "prover", "P", "v1");  // quantum selected, but V2.prover is classical-only
 await page.click('.palette-item:has-text("Classical channel")');
 await connect("V", "prover", "P", "v0");
-await connect("V2", "prover", "P", "v1");
 proj = (await api("/api/project")).project;
-check(proj.links.length === 3 && proj.links.filter((l) => l.kind === "quantum").length === 1,
-  `three links created by connecting ports (${proj.links.map((l) => `${l.id}:${l.kind}`)})`);
+check(proj.links.map((l) => `${l.id}:${l.kind}`).join(",") === "q:quantum,c:classical,c2:classical",
+  `connecting ports picks the kind both ports carry (${proj.links.map((l) => `${l.id}:${l.kind}`)})`);
+check(await page.locator('[data-testid="node-P"] .port-label.missing').count() === 0, "flags clear once the ports are wired");
 
 // --- project-level settings: shared randomness and the claim
 await page.keyboard.press("Escape");
@@ -109,6 +116,9 @@ await settle();
 let st = await api("/api/sim/state");
 check(st.stopped && st.decision.outcome === "accept", `GUI-built QPV_BB84 runs in the engine and accepts (${st.decision.summary})`);
 check(st.messages.length === 4, `engine exchanged 4 messages (qubit, theta, 2 answers) — got ${st.messages.length}`);
+await page.hover('[data-testid="link-hit-q"]', { force: true });
+const tip = await page.textContent('[data-testid="link-tip"]').catch(() => "");
+check(/length 3\.000 m.*propagation 10\.006923 ns/s.test(tip ?? ""), `hovering a link shows its length and engine delay (${tip})`);
 
 // --- edit the prover automaton graphically: add a state and a transition
 await page.dblclick('[data-testid="node-P"] .head');
@@ -154,6 +164,16 @@ const saved = JSON.parse(readFileSync(path, "utf8"));
 proj = (await api("/api/project")).project;
 const strip = (o) => JSON.parse(JSON.stringify(o, (k, val) => (k === "ui" ? undefined : val)));
 check(JSON.stringify(strip(saved)) === JSON.stringify(strip(proj)), "saved file equals the engine's project document");
+
+// --- auto-wiring rebuilds every link from the participants
+await fetch(BASE + "/api/project", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...proj, links: [] }) });
+await page.reload();
+await page.waitForSelector('[data-testid="btn-autowire"]');
+await page.click('[data-testid="btn-autowire"]');
+await settle();
+proj = (await api("/api/project")).project;
+check(proj.links.map((l) => `${l.id}:${l.kind}:${l.a.node}.${l.a.port}-${l.b.node}.${l.b.port}`).join(",")
+  === "q0:quantum:V.prover-P.v0,c0:classical:V.prover-P.v0,c1:classical:V2.prover-P.v1", `Auto-wire creates the required links (${proj.links.map((l) => l.id)})`);
 
 check(errors.length === 0, `no browser errors (${errors.slice(0, 3).join(" | ")})`);
 await browser.close();

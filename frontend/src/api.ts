@@ -1,4 +1,4 @@
-import type { Issue, Project, SimState } from "./types";
+import type { Analysis, Issue, LightGrid, LightPoint, PortKinds, Project, ScenarioCatalog, SimState } from "./types";
 
 // Two transports for the same API: HTTP to `qpv serve`, or (static GitHub Pages
 // build, VITE_BACKEND=pyodide) the Python engine running in a Web Worker.
@@ -79,7 +79,10 @@ export async function downloadFrom(url: string, filename: string, mime = "applic
   URL.revokeObjectURL(a.href);
 }
 
-export interface ProjectResponse { project: Project; issues: Issue[]; revision: number; sim_error: string | null }
+export interface ProjectResponse {
+  project: Project; issues: Issue[]; revision: number; sim_error: string | null;
+  ports: PortKinds; verifier_types: Record<string, "quantum" | "classical">;
+}
 
 export const api = {
   meta: () => req<any>("GET", "/api/meta"),
@@ -98,4 +101,12 @@ export const api = {
   startExperiment: (exp: unknown) => req<{ id: string }>("POST", "/api/experiments", exp),
   experiment: (id: string) => req<any>("GET", `/api/experiments/${id}`),
   cancelExperiment: (id: string) => req<any>("POST", `/api/experiments/${id}/cancel`),
+  analysis: () => req<Analysis>("GET", "/api/qpv/analysis"),
+  scenarios: () => req<ScenarioCatalog>("GET", "/api/qpv/scenarios"),
+  scenario: (body: Record<string, any>) => req<ProjectResponse>("POST", "/api/qpv/scenario", body),
+  attack: (attack: string, policy?: string) => req<ProjectResponse>("POST", "/api/qpv/attack", { attack, policy }),
+  autowire: () => req<ProjectResponse>("POST", "/api/qpv/autowire"),
+  lightPoint: (point: number[], tau_ns?: number) => req<LightPoint>("POST", "/api/qpv/lightcone", { point, tau_ns }),
+  lightGrid: (body: { n?: number; tau_ns?: number; z?: number; bounds?: number[][] }) =>
+    req<LightGrid>("POST", "/api/qpv/lightcone", body),
 };

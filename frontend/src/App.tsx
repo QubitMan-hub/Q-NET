@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore, type DockTab } from "./store";
 import { nsLabel } from "./format";
-import type { Project, Role } from "./types";
+import type { Project } from "./types";
+import { GLOSSARY } from "./glossary";
 import { NetworkCanvas } from "./components/NetworkCanvas";
 import { AutomatonCanvas } from "./components/AutomatonCanvas";
 import { Spacetime } from "./components/Spacetime";
@@ -118,32 +119,33 @@ function Palette() {
   const view = useStore((s) => s.view);
   const project = useStore((s) => s.project);
   const focus = useStore((s) => s.focus);
-  const roles: [Role, string, string][] = [
-    ["verifier", "Verifier", "Trusted; sends challenges, enforces deadlines"],
-    ["prover", "Prover", "Claims to be at the claimed position"],
-    ["adversary", "Adversary", "Attacker; capabilities enforced"],
-    ["other", "Other", "Generic participant"],
+  const kinds: [string, string, string, string][] = [
+    ["verifier:quantum", "Quantum verifier", "verifier vq", GLOSSARY.quantum_verifier],
+    ["verifier:classical", "Classical verifier", "verifier vc", GLOSSARY.classical_verifier],
+    ["prover", "Prover", "prover", GLOSSARY.prover],
+    ["adversary", "Adversary", "adversary", GLOSSARY.adversary],
+    ["other", "Other", "other", GLOSSARY.other],
   ];
   const aname = project?.participants.find((p) => p.id === focus)?.automaton;
   return (
     <div className="palette">
       <div>
         <h4>Participants</h4>
-        {roles.map(([r, label, hint]) => (
-          <div key={r} className="palette-item" draggable title={hint}
-            onDragStart={(e) => { e.dataTransfer.setData("application/qpv-role", r); e.dataTransfer.effectAllowed = "copy"; }}>
-            <span className={`swatch ${r}`} />{label}
+        {kinds.map(([k, label, swatch, hint]) => (
+          <div key={k} className="palette-item" draggable title={hint}
+            onDragStart={(e) => { e.dataTransfer.setData("application/qpv-role", k); e.dataTransfer.effectAllowed = "copy"; }}>
+            <span className={`swatch ${swatch}`} />{label}
           </div>
         ))}
         <div className="hint">Drag onto the network canvas.</div>
       </div>
       <div>
         <h4>Channels</h4>
-        <button className={`palette-item${linkKind === "quantum" ? " on" : ""}`} onClick={() => setLinkKind("quantum")} aria-pressed={linkKind === "quantum"}>
-          <span className="chan quantum" />Quantum channel</button>
-        <button className={`palette-item${linkKind === "classical" ? " on" : ""}`} onClick={() => setLinkKind("classical")} aria-pressed={linkKind === "classical"}>
-          <span className="chan classical" />Classical channel</button>
-        <div className="hint">Connect two ports to create the selected channel kind. Delay = length / speed + latency.</div>
+        <button className={`palette-item${linkKind === "quantum" ? " on" : ""}`} onClick={() => setLinkKind("quantum")} aria-pressed={linkKind === "quantum"}
+          title={GLOSSARY.quantum_link}><span className="chan quantum" />Quantum channel</button>
+        <button className={`palette-item${linkKind === "classical" ? " on" : ""}`} onClick={() => setLinkKind("classical")} aria-pressed={linkKind === "classical"}
+          title={GLOSSARY.classical_link}><span className="chan classical" />Classical channel</button>
+        <div className="hint">Drag between two ports to connect them; a port that carries only one kind decides the channel. Delay = length / speed + latency.</div>
       </div>
       {view === "automaton" && aname && (
         <div>

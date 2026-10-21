@@ -82,6 +82,11 @@ export function Check({ checked, onChange, label }: { checked: boolean; onChange
   );
 }
 
+/** Settings most users never need, one click away. */
+export function Advanced({ children }: { children: ReactNode }) {
+  return <details className="advanced"><summary>Advanced</summary><div>{children}</div></details>;
+}
+
 export function Section({ title, aside, children }: { title: ReactNode; aside?: ReactNode; children: ReactNode }) {
   return (
     <div className="section">
@@ -116,6 +121,9 @@ export const Icon = {
   panelLeft: () => <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" {...P} /><path d="M6 3v10" {...P} /></svg>,
   panelRight: () => <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5" {...P} /><path d="M10 3v10" {...P} /></svg>,
   help: () => <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" {...P} /><path d="M6.3 6.3a1.8 1.8 0 1 1 2.5 1.6c-.5.2-.8.6-.8 1.1v.4M8 11.3v.2" {...P} /></svg>,
+  qubit: () => <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" {...P} /><ellipse cx="8" cy="8" rx="5.5" ry="2" {...P} strokeWidth={1.1} /><circle cx="8" cy="2.5" r="1.4" fill="currentColor" /></svg>,
+  bit: () => <svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.5" {...P} /><path d="M6.2 6.2 7.5 5v6M10 5v6" {...P} /></svg>,
+  wire: () => <svg viewBox="0 0 16 16"><circle cx="3.5" cy="4" r="1.5" {...P} /><circle cx="12.5" cy="12" r="1.5" {...P} /><path d="M5 4h3.5v8H11" {...P} /></svg>,
   theme: () => <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" {...P} /><path d="M8 2.5a5.5 5.5 0 0 0 0 11z" fill="currentColor" /></svg>,
 };
 

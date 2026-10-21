@@ -18,18 +18,24 @@ function exampleFromHash(): string | null {
   return m ? m[1] : null;
 }
 import { clone } from "./format";
-import type { Issue, Project, Selection, SimState } from "./types";
+import type { Analysis, Issue, PortKinds, Project, Ref, ScenarioCatalog, Selection, SimState, VerifierType } from "./types";
 
 export type CanvasView = "network" | "automaton" | "spacetime";
-export type DockTab = "events" | "timeline" | "console" | "experiments" | "validation" | "decision";
+export type DockTab = "events" | "timeline" | "timing" | "console" | "experiments" | "compare" | "validation" | "decision";
 
-export interface ConsoleEntry { id: number; cmd: string; status: "running" | "ok" | "error"; text: string; data?: any; view?: string | null }
+export interface ConsoleEntry {
+  id: number; cmd: string; status: "running" | "ok" | "error"; text: string; data?: any; view?: string | null; refs?: Ref[];
+}
 
 interface Store {
   meta: any | null;
   project: Project | null;
   revision: number;
   issues: Issue[];
+  ports: PortKinds;
+  verifierTypes: Record<string, VerifierType>;
+  analysis: Analysis | null;
+  scenarios: ScenarioCatalog | null;
   simError: string | null;
   sim: SimState | null;
   selection: Selection;
@@ -71,6 +77,10 @@ interface Store {
   setHighlightChain(ids: number[]): void;
   toggleTheme(): void;
   refreshSim(full?: boolean): Promise<void>;
+  loadScenario(body: Record<string, any>): Promise<void>;
+  switchAttack(attack: string, policy?: string): Promise<void>;
+  autowire(): Promise<void>;
+  goTo(ref: Ref): void;
 }
 
 let pushTimer: number | undefined;
@@ -79,7 +89,25 @@ let inflight = false;
 
 export const useStore = create<Store>((set, get) => {
   const applyProject = (r: ProjectResponse) => {
-    set({ project: r.project, revision: r.revision, issues: r.issues, simError: r.sim_error, dirtyPush: false });
+    set({ project: r.project, revision: r.revision, issues: r.issues, simError: r.sim_error, ports: r.ports,
+      verifierTypes: r.verifier_types, dirtyPush: false });
+    refreshAnalysis();
+  };
+
+  // Timing and references depend only on the setup: refresh them whenever the engine's project changes.
+  const refreshAnalysis = () => {
+    const rev = get().revision;
+    api.analysis().then((a) => { if (get().revision === rev) set({ analysis: a }); }).catch(() => set({ analysis: null }));
+  };
+
+  // Replace the project with one the engine built (scenario, attack switch, auto-wiring).
+  const install = async (r: ProjectResponse, toast: string) => {
+    applyProject(r);
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    set({ past: [...get().past.slice(-99), get().project!], future: [], selection: { kind: "project" }, highlightChain: [],
+      focus: r.project.participants.find((p) => p.role === "verifier")?.id ?? null });
+    await get().refreshSim(true);
+    get().setToast(toast);
   };
 
   // Merge an incremental engine snapshot into the accumulated one.
@@ -113,20 +141,22 @@ export const useStore = create<Store>((set, get) => {
     const p = get().project;
     if (!p) return;
     const r = await api.putProject(p);
-    set({ revision: r.revision, issues: r.issues, simError: r.sim_error, dirtyPush: false });
+    set({ revision: r.revision, issues: r.issues, simError: r.sim_error, ports: r.ports, verifierTypes: r.verifier_types,
+      dirtyPush: false });
+    refreshAnalysis();
     await get().refreshSim(true);
   };
 
   return {
-    meta: null, project: null, revision: 0, issues: [], simError: null, sim: null,
+    meta: null, project: null, revision: 0, issues: [], ports: {}, verifierTypes: {}, analysis: null, scenarios: null, simError: null, sim: null,
     selection: { kind: "project" }, view: "network", focus: null, dock: "events",
     past: [], future: [], playing: false, playRate: 4, busy: false, dirtyPush: false, toast: null,
     linkKind: "quantum", consoleLog: [], highlightChain: [], theme: "light",
 
     async init() {
       await guard(async () => {
-        const [meta, proj] = await Promise.all([api.meta(), api.project()]);
-        set({ meta });
+        const [meta, proj, scenarios] = await Promise.all([api.meta(), api.project(), api.scenarios()]);
+        set({ meta, scenarios });
         applyProject(proj);
         // A shared link (#example=name) wins; otherwise the in-browser build restores
         // the visitor's last project from this browser.
@@ -285,7 +315,8 @@ export const useStore = create<Store>((set, get) => {
         const since = get().sim?.trace.length ?? 0;
         const rev = get().revision;
         const r = await api.console(line, since);
-        patch({ status: r.result.ok ? "ok" : "error", text: r.result.output || (r.result.ok ? "Done." : "That did not work."), data: r.result.data, view: r.result.view });
+        patch({ status: r.result.ok ? "ok" : "error", text: r.result.output || (r.result.ok ? "Done." : "That did not work."),
+          data: r.result.data, view: r.result.view, refs: r.result.refs });
         if (r.state.revision !== rev) {
           applyProject(await api.project());
           await get().refreshSim(true);
@@ -298,6 +329,37 @@ export const useStore = create<Store>((set, get) => {
     },
 
     clearConsole() { set({ consoleLog: [] }); },
+
+    async loadScenario(body) {
+      await guard(async () => {
+        set({ playing: false });
+        const r = await api.scenario(body);
+        await install(r, `Built “${r.project.meta.name}”`);
+      });
+    },
+
+    async switchAttack(attack, policy) {
+      await guard(async () => {
+        if (get().dirtyPush) await pushNow();
+        const r = await api.attack(attack, policy);
+        await install(r, `Now answering: ${get().scenarios?.answerers[attack] ?? attack}`);
+        await get().runToEnd();
+      });
+    },
+
+    async autowire() {
+      await guard(async () => {
+        if (get().dirtyPush) await pushNow();
+        const r = await api.autowire();
+        await install(r, `Wired ${r.project.links.length} links`);
+      });
+    },
+
+    goTo(ref) {
+      if (ref.kind === "transition") set({ view: "automaton", focus: get().sim ? Object.values(get().sim!.nodes)
+        .find((n) => n.automaton === ref.automaton)?.id ?? get().focus : get().focus });
+      get().select(ref.kind === "event" ? { kind: "event", seq: ref.seq } : ref);
+    },
 
     select(sel) {
       set({ selection: sel });
