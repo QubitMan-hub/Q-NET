@@ -10,6 +10,7 @@ import { Inspector } from "./components/Inspector";
 import { ConsolePanel, DecisionPanel, EventLog, Experiments, Timeline, ValidationPanel } from "./components/Dock";
 import { ComparePanel, TimingPanel } from "./components/QpvPanels";
 import { ScenarioDialog, StartScreen } from "./components/ScenarioDialog";
+import { PlayPanel, answering } from "./components/PlayPanel";
 import { Brand, Icon } from "./components/ui";
 import { deleteSelection, duplicateParticipant, addState } from "./editing";
 import { IN_BROWSER, onEngineStatus } from "./api";
@@ -32,17 +33,8 @@ function useDrag(initial: number, axis: "x" | "y", invert = false, min = 120, ma
   return [size, onDown] as const;
 }
 
-type Panels = { left: boolean; right: boolean; toggle: (side: "left" | "right") => void; showWelcome: () => void; buildScenario: () => void };
-
-/** Who currently answers at the claim, in the engine's scenario vocabulary. */
-function answering(p: Project): string {
-  const autos = p.participants.filter((q) => q.role !== "verifier").map((q) => q.automaton).join(" ");
-  if (autos.includes("qpv_adv_chain")) return "teleport";
-  if (autos.includes("qpv_adv_unentangled")) return "unentangled";
-  if (autos.includes("qpv_adv_guess")) return "guess";
-  const prover = p.participants.find((q) => q.id === p.claim.prover);
-  return prover ? (prover.role === "prover" ? "honest" : "displaced") : "";
-}
+type Panels = { left: boolean; right: boolean; expert: boolean; toggle: (side: "left" | "right") => void; toggleExpert: () => void;
+  showWelcome: () => void; buildScenario: () => void };
 
 function Toolbar({ panels }: { panels: Panels }) {
   const s = useStore();
@@ -62,18 +54,18 @@ function Toolbar({ panels }: { panels: Panels }) {
     <div className="toolbar">
       <div className="brand"><Brand /><span>QPV Workbench</span></div>
       <div className="tool-group">
-        <button className={`btn ghost${panels.left ? " active" : ""}`} title="Show or hide the palette" aria-pressed={panels.left}
-          onClick={() => panels.toggle("left")}><Icon.panelLeft /></button>
-        <button className={`btn ghost${panels.right ? " active" : ""}`} title="Show or hide the inspector" aria-pressed={panels.right}
+        {panels.expert && <button className={`btn ghost${panels.left ? " active" : ""}`} title="Show or hide the palette" aria-pressed={panels.left}
+          onClick={() => panels.toggle("left")}><Icon.panelLeft /></button>}
+        <button className={`btn ghost${panels.right ? " active" : ""}`} title="Show or hide the side panel" aria-pressed={panels.right}
           onClick={() => panels.toggle("right")}><Icon.panelRight /></button>
       </div>
       <input className="project-name" value={s.project?.meta.name ?? ""} aria-label="Project name" data-rev={s.revision}
         onChange={(e) => s.edit((p) => { p.meta.name = e.target.value; })} />
       <div className="tool-group">
-        <select className="btn" style={{ width: 150 }} value="" aria-label="Open example" onChange={(e) => e.target.value && s.loadExample(e.target.value)}>
+        {panels.expert && <select className="btn" style={{ width: 150 }} value="" aria-label="Open example" onChange={(e) => e.target.value && s.loadExample(e.target.value)}>
           <option value="">Examples…</option>
           {Object.entries(s.meta?.examples ?? {}).map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
-        </select>
+        </select>}
         <button className="btn ghost" title="New scenario: dimension, verifiers, claim, prover or attack (or a blank project)" onClick={panels.buildScenario}
           data-testid="btn-new"><Icon.plus /><span className="lbl">New</span></button>
         <button className="btn ghost" title="Open project file" onClick={() => fileRef.current?.click()}><Icon.open /><span className="lbl">Open</span></button>
@@ -91,6 +83,7 @@ function Toolbar({ panels }: { panels: Panels }) {
       <span className="grow" />
       <div className="tool-group" aria-label="Simulation controls">
         <button className="btn ghost" title="Reset (R)" onClick={() => s.reset()} data-testid="btn-reset"><Icon.reset /><span className="lbl">Reset</span></button>
+        {panels.expert && <>
         <button className="btn ghost" title="Execute one event (N)" disabled={!sim || sim.stopped} onClick={() => s.step(1)} data-testid="btn-step"><Icon.step /><span className="lbl">Step</span></button>
         <button className={`btn ${s.playing ? "active" : "ghost"}`} title="Play: advance engine time continuously (Space)" disabled={!sim || sim.stopped}
           onClick={() => s.setPlaying(!s.playing)} data-testid="btn-play">{s.playing ? <Icon.pause /> : <Icon.play />}<span className="lbl">{s.playing ? "Pause" : "Play"}</span></button>
@@ -98,6 +91,7 @@ function Toolbar({ panels }: { panels: Panels }) {
           onChange={(e) => s.setPlayRate(Number(e.target.value))}>
           {[0.5, 1, 2, 4, 10, 25].map((r) => <option key={r} value={r}>{r} ns/s</option>)}
         </select>
+        </>}
         <button className="btn primary" title="Run to completion (E)" disabled={!sim || sim.stopped} onClick={() => s.runToEnd()} data-testid="btn-run"><Icon.end /><span className="lbl lbl-keep">Run</span></button>
       </div>
       <div className="clock" title="Global simulation time (engine clock)">
@@ -107,6 +101,8 @@ function Toolbar({ panels }: { panels: Panels }) {
       <span className={`status-pill ${s.simError ? "error" : outcome ?? "pending"}`} data-testid="outcome" data-rev={sim?.revision ?? ""}>
         {s.simError ? "cannot run" : outcome === "accept" ? "accepted" : outcome === "reject" ? "rejected" : sim?.stopped ? "stopped" : "running"}
       </span>
+      <button className={`btn ghost${panels.expert ? " active" : ""}`} aria-pressed={panels.expert} onClick={panels.toggleExpert} data-testid="btn-expert"
+        title="Expert tools: palette, protocol editor, step-by-step playback, event log, experiments">Expert</button>
       <button className="btn ghost" title="Getting started" aria-label="Getting started" onClick={panels.showWelcome}><Icon.help /></button>
       <button className="btn ghost" title="Toggle dark theme" onClick={s.toggleTheme}><Icon.theme /></button>
     </div>
@@ -172,9 +168,10 @@ function Palette() {
 }
 
 const DOCK_TABS: [DockTab, string][] = [
-  ["events", "Events"], ["timeline", "Timeline"], ["timing", "Timing"], ["console", "Console"],
-  ["experiments", "Experiments"], ["compare", "Compare"], ["validation", "Validation"], ["decision", "Decision"],
+  ["decision", "Result"], ["compare", "Compare"], ["timing", "Timing"], ["events", "Events"], ["timeline", "Timeline"],
+  ["console", "Console"], ["experiments", "Experiments"], ["validation", "Validation"],
 ];
+const SIMPLE_TABS: DockTab[] = ["decision", "compare", "timing"];
 
 function Boot({ error }: { error: string | null }) {
   const [status, setStatus] = useState(IN_BROWSER ? "Starting…" : "Connecting to the simulation engine…");
@@ -194,6 +191,7 @@ function Boot({ error }: { error: string | null }) {
 }
 
 const WELCOME_KEY = "qpv.welcome.dismissed";
+const EXPERT_KEY = "qpv.expert";
 
 export default function App() {
   const s = useStore();
@@ -205,9 +203,18 @@ export default function App() {
   const [right, setRight] = useState(window.innerWidth >= 900);
   const [welcome, setWelcome] = useState(() => storageGet(WELCOME_KEY) !== "1");
   const [builder, setBuilder] = useState(false);
+  const [expert, setExpert] = useState(() => storageGet(EXPERT_KEY) === "1");
+  const [details, setDetails] = useState(false);
   const panels: Panels = {
-    left, right,
+    left: left && expert, right, expert,
     toggle: (side) => (side === "left" ? setLeft((v) => !v) : setRight((v) => !v)),
+    toggleExpert: () => setExpert((v) => {
+      storageSet(EXPERT_KEY, v ? null : "1");
+      const st = useStore.getState();
+      if (v && !SIMPLE_TABS.includes(st.dock)) st.setDock("decision");
+      if (v && st.view === "automaton") st.setView("network");
+      return !v;
+    }),
     showWelcome: () => setWelcome(true),
     buildScenario: () => setBuilder(true),
   };
@@ -221,6 +228,8 @@ export default function App() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  useEffect(() => { if (s.selection.kind !== "project") setDetails(true); }, [s.selection]);
 
   useEffect(() => { s.init(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -257,7 +266,7 @@ export default function App() {
       else if (e.key === "r" || e.key === "R") st.reset();
       else if (e.key === "Delete" || e.key === "Backspace") deleteSelection();
       else if (e.key === "1") st.setView("network");
-      else if (e.key === "2") st.setView("automaton");
+      else if (e.key === "2" && storageGet(EXPERT_KEY) === "1") st.setView("automaton");
       else if (e.key === "3") st.setView("spacetime");
       else if (e.key === "`") { e.preventDefault(); st.setDock("console"); setTimeout(() => (document.querySelector('[data-testid="console-input"]') as HTMLInputElement | null)?.focus(), 30); }
       else if (e.key === "Escape") st.select({ kind: "project" });
@@ -269,32 +278,33 @@ export default function App() {
   if (!s.project) return <Boot error={s.toast?.error ? s.toast.text : null} />;
   const errors = s.issues.filter((i) => i.level === "error").length;
   const warnings = s.issues.filter((i) => i.level === "warning").length;
+  const dock = expert || SIMPLE_TABS.includes(s.dock) ? s.dock : "decision";
   const focusAut = s.project.participants.find((p) => p.id === s.focus)?.automaton;
   return (
     <div className="app">
       <Toolbar panels={panels} />
-      <div className="workspace" style={{ gridTemplateColumns: `${left ? leftW : 0}px ${left ? 1 : 0}px minmax(0, 1fr) ${right ? 1 : 0}px ${right ? `min(${rightW}px, 70vw)` : "0px"}` }}>
-        <div className="panel" style={left ? undefined : { visibility: "hidden", overflow: "hidden" }}><div className="panel-head">Palette</div><div className="panel-body"><Palette /></div></div>
-        <div className="splitter-v" onPointerDown={dragLeft} role="separator" aria-orientation="vertical" style={left ? undefined : { visibility: "hidden", overflow: "hidden" }} />
+      <div className="workspace" style={{ gridTemplateColumns: `${panels.left ? leftW : 0}px ${panels.left ? 1 : 0}px minmax(0, 1fr) ${right ? 1 : 0}px ${right ? `min(${rightW}px, 70vw)` : "0px"}` }}>
+        <div className="panel" style={panels.left ? undefined : { visibility: "hidden", overflow: "hidden" }}><div className="panel-head">Palette</div><div className="panel-body"><Palette /></div></div>
+        <div className="splitter-v" onPointerDown={dragLeft} role="separator" aria-orientation="vertical" style={panels.left ? undefined : { visibility: "hidden", overflow: "hidden" }} />
         <div className="workspace" style={{ gridTemplateRows: `minmax(0, 1fr) 1px ${dockH}px`, minWidth: 0 }}>
           <div className="panel" style={{ background: "var(--paper)" }}>
             <div className="tabs" role="tablist">
               <button className={`tab${s.view === "network" ? " on" : ""}`} onClick={() => s.setView("network")} role="tab">Network</button>
-              <button className={`tab${s.view === "automaton" ? " on" : ""}`} onClick={() => s.setView("automaton")} role="tab">
-                Automaton{s.focus ? <span className="count">{s.focus} · {focusAut}</span> : null}</button>
+              {expert && <button className={`tab${s.view === "automaton" ? " on" : ""}`} onClick={() => s.setView("automaton")} role="tab">
+                Automaton{s.focus ? <span className="count">{s.focus} · {focusAut}</span> : null}</button>}
               <button className={`tab${s.view === "spacetime" ? " on" : ""}`} onClick={() => s.setView("spacetime")} role="tab">Geometry</button>
               <span className="spacer" />
-              <label className="who-answers" title={s.analysis?.qpv ? `${GLOSSARY.attack} Switching reruns at once.` : "Switching who answers needs a QPV setup (build one with New)."}>
+              {expert && <label className="who-answers" title={s.analysis?.qpv ? `${GLOSSARY.attack} Switching reruns at once.` : "Switching who answers needs a QPV setup (build one with New)."}>
                 Who answers
                 <select className="select attack-switch" value={answering(s.project)} aria-label="Who answers at the claim" data-testid="attack-switch"
                   disabled={!s.analysis?.qpv} onChange={(e) => s.switchAttack(e.target.value)}>
                   {!answering(s.project) && <option value="">—</option>}
                   {Object.entries(s.scenarios?.answerers ?? {}).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
-              </label>
-              <span className="xs muted tab-info" style={{ alignSelf: "center", paddingRight: 10 }}>
+              </label>}
+              {expert && <span className="xs muted tab-info" style={{ alignSelf: "center", paddingRight: 10 }}>
                 {s.project.meta.protocol.name} · backend {s.project.simulation.backend} · seed {s.sim?.seed ?? s.project.simulation.seed}
-              </span>
+              </span>}
             </div>
             <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex" }}>
               {s.view === "network" && <NetworkCanvas />}
@@ -305,8 +315,8 @@ export default function App() {
           <div className="splitter-h" onPointerDown={dragDock} role="separator" aria-orientation="horizontal" />
           <div className="panel">
             <div className="tabs" role="tablist">
-              {DOCK_TABS.map(([k, label]) => (
-                <button key={k} role="tab" className={`tab${s.dock === k ? " on" : ""}`} onClick={() => s.setDock(k)} data-testid={`dock-${k}`}>
+              {DOCK_TABS.filter(([k]) => expert || SIMPLE_TABS.includes(k)).map(([k, label]) => (
+                <button key={k} role="tab" className={`tab${dock === k ? " on" : ""}`} onClick={() => s.setDock(k)} data-testid={`dock-${k}`}>
                   {label}
                   {k === "events" && s.sim && <span className="count">{s.sim.trace_length}</span>}
                   {k === "validation" && (errors + warnings > 0) && <span className="count" style={{ color: errors ? "var(--reject)" : "var(--warn)" }}>{errors ? `${errors} errors` : `${warnings} warnings`}</span>}
@@ -316,23 +326,26 @@ export default function App() {
               ))}
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
-              {s.dock === "events" && <EventLog />}
-              {s.dock === "timeline" && <Timeline />}
-              {s.dock === "timing" && <TimingPanel />}
-              {s.dock === "compare" && <ComparePanel />}
-              {s.dock === "console" && <ConsolePanel />}
-              {s.dock === "experiments" && <Experiments />}
-              {s.dock === "validation" && <ValidationPanel />}
-              {s.dock === "decision" && <DecisionPanel />}
+              {dock === "events" && <EventLog />}
+              {dock === "timeline" && <Timeline />}
+              {dock === "timing" && <TimingPanel />}
+              {dock === "compare" && <ComparePanel />}
+              {dock === "console" && <ConsolePanel />}
+              {dock === "experiments" && <Experiments />}
+              {dock === "validation" && <ValidationPanel />}
+              {dock === "decision" && <DecisionPanel />}
             </div>
           </div>
         </div>
         <div className="splitter-v" onPointerDown={dragRight} role="separator" aria-orientation="vertical" style={right ? undefined : { visibility: "hidden" }} />
         <div className="panel" style={right ? undefined : { visibility: "hidden", overflow: "hidden" }}>
-          <div className="panel-head">Inspector<span className="grow" />
-            {s.selection.kind !== "project" && <button className="btn ghost" onClick={() => s.select({ kind: "project" })}>Project</button>}
+          <div className="tabs" role="tablist">
+            <button role="tab" className={`tab${details ? "" : " on"}`} onClick={() => { setDetails(false); s.select({ kind: "project" }); }} data-testid="tab-play">Play</button>
+            <button role="tab" className={`tab${details ? " on" : ""}`} onClick={() => setDetails(true)} data-testid="tab-details">Details</button>
+            <span className="spacer" />
+            {details && s.selection.kind !== "project" && <button className="btn ghost" onClick={() => s.select({ kind: "project" })}>Project</button>}
           </div>
-          <div className="panel-body"><Inspector /></div>
+          <div className="panel-body">{details ? <Inspector /> : <PlayPanel onDetails={() => setDetails(true)} />}</div>
         </div>
       </div>
       {welcome && <StartScreen onClose={closeWelcome} onBuild={() => setBuilder(true)} />}

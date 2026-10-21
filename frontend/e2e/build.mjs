@@ -20,7 +20,7 @@ const api = async (path) => (await fetch(BASE + path)).json();
 
 const browser = await chromium.launch({ headless: true }).catch(() => chromium.launch({ headless: true, executablePath: "/opt/pw-browsers/chromium" }));
 const page = await browser.newPage({ viewport: { width: 1600, height: 960 }, acceptDownloads: true });
-await page.addInitScript(() => { try { localStorage.setItem("qpv.welcome.dismissed", "1"); } catch {} });
+await page.addInitScript(() => { try { localStorage.setItem("qpv.welcome.dismissed", "1"); localStorage.setItem("qpv.expert", "1"); } catch {} });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });

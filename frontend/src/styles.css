@@ -541,3 +541,42 @@ svg .tick { font-family: var(--font-code); font-size: 10px; fill: var(--ink-3); 
   .cx { grid-template-columns: 1fr; }
   .cx-guide { display: none; }
 }
+
+/* ------------------------------------------------------------ play panel (simple mode) */
+.play { padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.play h3 { margin: 10px 0 0; font-size: var(--fs-m); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.play-intro { margin: 0; font-size: var(--fs-m); line-height: 1.5; color: var(--ink-2); }
+.play-step {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--ink); color: var(--paper); font-size: var(--fs-xs);
+}
+.play-worlds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.play-world, .play-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; cursor: pointer;
+  padding: 8px 10px; border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--panel); color: var(--ink);
+}
+.play-world span, .play-card span { font-size: var(--fs-s); color: var(--ink-3); line-height: 1.35; }
+.play-world b, .play-card b { font-size: var(--fs-m); }
+.play-world:hover:not(:disabled), .play-card:hover:not(:disabled) { border-color: var(--rule-strong); background: var(--sunken); }
+.play-world.on { border-color: var(--verifier); background: var(--verifier-soft); }
+.play-who { display: flex; flex-direction: column; gap: 5px; }
+.play-card { border-left-width: 4px; }
+.play-card.true { border-left-color: var(--prover); }
+.play-card.cheat { border-left-color: var(--adversary); }
+.play-card.true.on { background: var(--prover-soft); border-color: var(--prover); }
+.play-card.cheat.on { background: var(--adversary-soft); border-color: var(--adversary); }
+.play-world:disabled, .play-card:disabled { opacity: 0.6; cursor: progress; }
+.play-result { padding: 12px; border-radius: var(--r-m); background: var(--sunken); }
+.play-result.accept { background: var(--prover-soft); }
+.play-result.reject { background: var(--adversary-soft); }
+.play-headline { font-size: var(--fs-xl); font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; }
+.play-result.accept .play-headline { color: var(--accept); }
+.play-result.reject .play-headline { color: var(--reject); }
+.play-why { margin-top: 6px; font-size: var(--fs-s); line-height: 1.45; color: var(--ink-2); }
+.play .btn { height: 32px; justify-content: center; font-size: var(--fs-m); }
+.play-score { font-size: var(--fs-m); display: flex; flex-direction: column; gap: 6px; }
+.play-bar { position: relative; height: 10px; border-radius: 5px; background: var(--sunken); }
+.play-bar > div { height: 100%; border-radius: 5px; background: var(--ink); transition: width 0.3s ease; }
+.play-bar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--warn); }
+.play-foot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule); display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+@media (prefers-reduced-motion: reduce) { .play-bar > div { transition: none; } }

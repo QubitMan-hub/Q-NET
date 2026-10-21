@@ -28,7 +28,7 @@ const launchOpts = { headless: true };
 try { require("node:fs").accessSync("/opt/pw-browsers/chromium"); } catch { /* default */ }
 const browser = await chromium.launch(launchOpts).catch(() => chromium.launch({ ...launchOpts, executablePath: "/opt/pw-browsers/chromium" }));
 const page = await browser.newPage({ viewport: { width: 1600, height: 960 } });
-await page.addInitScript(() => { try { localStorage.setItem("qpv.welcome.dismissed", "1"); } catch {} });
+await page.addInitScript(() => { try { localStorage.setItem("qpv.welcome.dismissed", "1"); localStorage.setItem("qpv.expert", "1"); } catch {} });
 const consoleErrors = [];
 page.on("pageerror", (e) => consoleErrors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text()); });
@@ -193,6 +193,19 @@ await page.waitForSelector('[data-testid="space-3d"]');
 check(await page.locator('[data-testid^="space-node-"]').count() === 5, "a 3D setup opens in the 3D view with 4 verifiers and the prover");
 await page.click('.canvas-tools button:text-is("top")');
 await page.screenshot({ path: `${SHOTS}/10-3d-top.png` });
+
+// Simple mode: the Play panel builds, runs and scores a scenario without the expert tools
+await page.click('[data-testid="btn-expert"]');
+check(!(await page.$('[data-testid="btn-step"]')) && !(await page.$('[data-testid="dock-events"]')), "simple mode hides the expert tools");
+await page.click('[data-testid="tab-play"]');
+await page.click('[data-testid="play-who-teleport"]');
+await page.waitForFunction(() => document.querySelector('[data-testid="play-who-teleport"]')?.getAttribute("aria-checked") === "true", null, { timeout: 30000 });
+await page.waitForFunction(() => document.querySelector('[data-testid="play-result"]')?.textContent?.startsWith("Fooled!"), null, { timeout: 30000 });
+check(true, "picking the entangled cheaters in 3D fools the verifiers");
+await page.click('[data-testid="play-hundred"]');
+await page.waitForSelector('[data-testid="play-score"] b', { timeout: 60000 });
+check((await page.textContent('[data-testid="play-score"]')).includes("Passed 100 of 100"), "100 rounds of the teleportation attack all pass");
+await page.screenshot({ path: `${SHOTS}/11-play.png` });
 
 check(consoleErrors.length === 0, `no browser errors (${consoleErrors.slice(0, 3).join(" | ")})`);
 await browser.close();
