@@ -28,6 +28,8 @@ from . import timeunits as tu
 from .library import EXAMPLES, automaton_library
 from .protocol.capabilities import PROFILES, ROLE_PROFILES, make_capabilities, profile_catalog
 from .protocol.project import ROLES, get_path, participant
+from .qpv import lightcone, presets, scenario
+from .qpv import timing as qtiming
 from .session import Session, SessionError, dump_json
 
 
@@ -38,10 +40,11 @@ class ConsoleResult:
     data: Any = None
     command: str = ""
     view: Optional[str] = None  # rendering hint for the UI ("help", "decision")
+    refs: List[Dict[str, Any]] = field(default_factory=list)  # selections the UI can jump to
 
     def as_dict(self):
         return {"ok": self.ok, "output": self.output, "data": self.data, "command": self.command,
-                "view": self.view}
+                "view": self.view, "refs": self.refs}
 
 
 @dataclass
@@ -115,7 +118,8 @@ class Console:
         word = "" if prefix.endswith(" ") else parts[-1]
         p = self.session.project
         pool = (self._ids() + sorted(EXAMPLES) + sorted(automaton_library()) + sorted(p["automata"])
-                + sorted(PROFILES) + sorted(ROLES) + [e.get("id", "") for e in p["experiments"]])
+                + sorted(PROFILES) + sorted(ROLES) + [e.get("id", "") for e in p["experiments"]]
+                + [r["id"] for r in scenario.READY] + list(scenario.ANSWERERS) + list(presets.PRESETS))
         return sorted({x for x in pool if x and x.startswith(word)})
 
     def execute(self, line: str) -> ConsoleResult:
@@ -135,8 +139,8 @@ class Console:
             return ConsoleResult(False, f"unknown command '{name}'.{hint} Type 'help' to see what you can do.", None, line)
         pos, kw = _split(args)
         try:
-            out, data = cmd.fn(*pos, **kw)
-            return ConsoleResult(True, out, data, line, cmd.view)
+            out, data, *refs = cmd.fn(*pos, **kw)
+            return ConsoleResult(True, out, data, line, cmd.view, refs[0] if refs else [])
         except TypeError:
             return ConsoleResult(False, f"'{cmd.name}' needs different arguments.\nusage: {cmd.usage}\n{cmd.help}", None, line)
         except (SessionError, KeyError, ValueError, RuntimeError, IndexError, AttributeError) as exc:
@@ -230,6 +234,112 @@ class Console:
             lines += [f"  {n.id:<6} local {tu.fmt(n.local(s.now))}  [{n.clock.describe()}]" for n in s.nodes.values()]
             return "\n".join(lines), {"now_fs": s.now}
 
+        # .......................................................... QPV
+        self._group = "QPV"
+
+        def install(doc):
+            S.set_project(doc)
+            iss = [i["message"] for i in S.validate() if i["level"] != "info"]
+            return f"{doc['meta']['name']}: {len(doc['participants'])} participants, {len(doc['links'])} links" + \
+                ("".join(f"\n  ! {m}" for m in iss)), None
+
+        @cmd("scenario", "scenario <ready-id> | scenario [dim=] [verifiers=] [attack=] ...",
+             "Build a complete QPV scenario in one step (dimension, verifiers, claim, prover, attack).",
+             examples=["scenario 2d_teleport", "scenario dim=3 attack=unentangled radius=5",
+                       "scenario dim=2 verifiers=5 claim=1,0 tolerance=0.2 combine=inner_product"])
+        def _scenario(ready=None, **kw):
+            if ready:
+                args = next((r["args"] for r in scenario.READY if r["id"] == ready), None)
+                if args is None:
+                    raise SessionError(f"no ready scenario {ready!r}; try: {', '.join(r['id'] for r in scenario.READY)}")
+                return install(scenario.build(**args))
+            names = {"radius": "radius_m", "tolerance": "tolerance_ns", "processing": "processing_ns",
+                     "displacement": "displacement_m", "bits": "share_bits"}
+            args = {names.get(k, k): ([float(c) for c in v.split(",")] if k == "claim" else _value(v))
+                    for k, v in kw.items()}
+            return install(scenario.build(**args))
+
+        @cmd("attack", "attack <honest|displaced|unentangled|teleport|guess> [policy=breidbart|Z|X|random]",
+             "Swap whoever answers at the claim and rerun at once.", ["switch"],
+             examples=["attack teleport", "attack unentangled policy=Z", "attack honest"])
+        def _attack(name, policy="breidbart"):
+            S.set_project(scenario.switch_attack(S.project, name, policy))
+            S.run()
+            d = sim().snapshot(since=len(sim().trace))["decision"]
+            return (f"{scenario.LABELS[name]}: {d['summary']}\n" + "\n".join(f"  - {l}" for l in d["sentences"]),
+                    d, [r for v in d["verifiers"] for r in v["refs"]])
+
+        @cmd("autowire", "autowire", "Create every link the verifiers, prover and attackers need.", ["wire"])
+        def _autowire():
+            return install(scenario.autowire(S.project))
+
+        @cmd("timing", "timing", "Each verifier's send time, arrival at the claim, deadline and slack.",
+             ["deadlines", "slack"], starter="Is the timing consistent?")
+        def _timing():
+            t = qtiming.table(S.project)
+            ns = lambda fs: f"{fs / tu.NS:.6f}"  # noqa: E731
+            rows = [f"  {'':<5} {'type':<9} {'dist m':>8} {'send':>12} {'at claim':>12} {'deadline':>12} "
+                    f"{'honest ans':>12} {'slack':>10}"]
+            rows += [f"  {r['id']:<5} {r['type']:<9} {r['distance_m']:>8.3f} {ns(r['send_fs']):>12} "
+                     f"{ns(r['at_claim_fs']):>12} {ns(r['deadline_fs']):>12} {ns(r['honest_answer_fs']):>12} "
+                     f"{ns(r['slack_fs']):>10}{'  !' if r['inconsistent'] else ''}" for r in t["rows"]]
+            rows += [f"  ! {i}" for i in t["issues"]]
+            return "times in ns (engine schedule)\n" + "\n".join(rows), t, \
+                [{"kind": "participant", "id": r["id"]} for r in t["rows"] if r["inconsistent"]]
+
+        @cmd("lightcone", "lightcone <x> [y] [z] [tau=<ns>]",
+             "Could a lone worst-case adversary at this point beat every deadline? Prints the slack per verifier.",
+             ["cone"], examples=["lightcone 0 0", "lightcone 1.5 0.5 tau=0.1"])
+        def _lightcone(*coords, tau=None):
+            r = lightcone.point(S.project, [float(c) for c in coords], None if tau is None else float(tau))
+            if r["reason"]:
+                raise SessionError(r["reason"])
+            verdict = (f"an adversary here meets every deadline with {r['slack_fs'] / tu.NS:.6f} ns to spare"
+                       if r["can_answer"] else
+                       f"an adversary here misses {r['binding']}'s deadline by {-r['slack_fs'] / tu.NS:.6f} ns")
+            lines = [f"{verdict} (processing tau = {r['tau_ns']} ns; adversary signals at vacuum c)"]
+            lines += [f"  {v['id']:<5} answer {v['arrival_fs'] / tu.NS:.6f} ns, deadline {v['deadline_fs'] / tu.NS:.6f} ns, "
+                      f"slack {v['slack_fs'] / tu.NS:+.6f} ns" for v in r["per_verifier"]]
+            return "\n".join(lines), r
+
+        @cmd("sweep", "sweep <preset> <from> <to> [steps=5] [runs=100] [seed=]",
+             "Vary one QPV quantity (distance, noise, drift, processing, entanglement, attack) and report "
+             "acceptance with 95% confidence intervals.",
+             examples=["sweep noise 0 0.5", "sweep processing 0 1 steps=6 runs=200", "sweep attack"])
+        def _sweep(name, lo=None, hi=None, steps="5", runs="100", seed=None):
+            if name not in presets.PRESETS:
+                raise SessionError(f"unknown preset {name!r}; choose from {', '.join(presets.PRESETS)}")
+            pr = presets.PRESETS[name]
+            if "values" in pr:
+                values = pr["values"]
+            else:
+                a, b, k = float(pr["range"][0] if lo is None else lo), float(pr["range"][1] if hi is None else hi), int(steps)
+                values = [round(a + (b - a) * i / max(1, k - 1), 9) for i in range(k)]
+            res = S.experiment({"id": f"sweep_{name}", "name": pr["label"], "runs": int(runs),
+                                "seed": int(seed) if seed is not None else S.project["simulation"]["seed"],
+                                "sweep": [{"preset": name, "values": values}]})
+            return _format_results(res), _strip_runs(res)
+
+        @cmd("compare", "compare [runs=200] [seed=]",
+             "Run the honest prover and every attack on this setup side by side, against theory.",
+             examples=["compare", "compare runs=1000"])
+        def _compare(runs="200", seed=None):
+            qpv_setup = scenario.qpv_verifiers(S.project)
+            xor = qpv_setup[0]["params"].get("combine", "xor") == "xor"
+            values = [a for a in ("honest", "unentangled", "teleport", "guess") if xor or a != "teleport"]
+            res = S.experiment({"id": "compare", "name": "Honest vs attacks", "runs": int(runs),
+                                "seed": int(seed) if seed is not None else S.project["simulation"]["seed"],
+                                "sweep": [{"preset": "attack", "values": values}]})
+            lines = [f"{'':<22} {'measured':>9} {'95% CI':>19} {'reference':>10} {'gap':>8}"]
+            for pt in res["points"]:
+                a = pt["assignment"]["preset:attack"]
+                acc, ref = pt["summary"]["acceptance"], presets.reference(S.project, a)
+                lines.append(f"{scenario.LABELS[a]:<22} {acc['p']:>9.4f} [{acc['lo']:.4f}, {acc['hi']:.4f}] "
+                             f"{ref['value']:>10.4f} {acc['p'] - ref['value']:>+8.4f}")
+            lines.append("references: " + "; ".join(f"{scenario.LABELS[a]}: {presets.reference(S.project, a)['source']}"
+                                                    for a in values))
+            return "\n".join(lines), _strip_runs(res)
+
         # .......................................................... results
         self._group = "Understand the result"
 
@@ -237,34 +347,8 @@ class Console:
              starter="Why was it accepted or rejected?", view="decision")
         def _decision():
             d = sim().snapshot(since=len(sim().trace))["decision"]
-            return d["summary"] + "\n" + "\n".join(f"  - {l}" for l in d["explanation"]), d
-
-        @cmd("timing", "timing [verifier]",
-             "Each verifier's challenges, answers and timers, with the margin of every answer.", ["deadlines"])
-        def _timing(vid=None):
-            s = sim()
-            out, data = [], {}
-            for v in [vid] if vid else s.verifiers:
-                n = node(v)
-                sent = sorted((m for m in s.messages.values() if m.src == v), key=lambda m: m.send_time)
-                got = [m for m in s.messages.values() if m.dst == v and m.arrival_time is not None]
-                first = sent[0].send_time if sent else None
-                timers = [r for r in s.trace if r.node == v and r.kind == "timer.set"
-                          and first is not None and r.time >= first]
-                out.append(f"{v} ({n.state}{', ' + n.outcome if n.outcome else ''})")
-                out += [f"  sent     '{m.tag}' to {m.dst} at {tu.fmt(m.depart_time)}" for m in sent]
-                for m in got:
-                    margins = ", ".join(f"{(r.data['fire_fs'] - m.arrival_time) / tu.NS:+.6f} ns vs timer "
-                                        f"'{r.data['name']}'" for r in timers)
-                    out.append(f"  received '{m.tag}'={m.value!r} from {m.src} at {tu.fmt(m.arrival_time)}"
-                               + (f"  (margin {margins})" if margins else ""))
-                out += [f"  timer    '{r.data['name']}' due {tu.fmt(r.data['fire_fs'])}" for r in timers]
-                if n.verdict:
-                    out.append(f"  verdict  {n.verdict['outcome']} at {tu.fmt(n.verdict['time_fs'])}: "
-                               f"{n.verdict.get('reason') or ''}")
-                data[v] = {"sent": [m.id for m in sent], "received": [m.id for m in got],
-                           "timers": [r.data for r in timers], "verdict": n.verdict}
-            return _lines(out, "no verifiers"), data
+            return (d["summary"] + "\n" + "\n".join(f"  - {l}" for l in d["sentences"]), d,
+                    [r for v in d["verifiers"] for r in v["refs"]])
 
         @cmd("events", "events [node=<id>] [kind=<k>] [grep=<text>] [last=<n>]", "Search what has happened so far.",
              ["trace", "log"], examples=["events node=V0", "events kind=msg last=10"])
@@ -518,7 +602,7 @@ class Console:
 
         @cmd("repeat", "repeat <runs> [seed=<s>] [vary=<path>:v1,v2[;<path>:v1,v2]] [workers=<n>]",
              "Repeat the run many times and report acceptance rates, optionally varying settings.",
-             ["batch", "sweep"], examples=["repeat 200", "repeat 100 vary=E0.processing_ns:0,0.3,0.6"])
+             ["batch"], examples=["repeat 200", "repeat 100 vary=E0.processing_ns:0,0.3,0.6"])
         def _repeat(runs, seed=None, vary=None, sweep=None, workers="1"):
             exp: Dict[str, Any] = {"id": "console", "name": "console batch", "runs": int(runs),
                                    "seed": int(seed) if seed is not None else S.project["simulation"]["seed"],

@@ -91,7 +91,7 @@ def _ui(claim, pos, radius, row=0):
 
 
 # ---------------------------------------------------------------- answerers
-def _qpv_verifiers(doc) -> List[Dict[str, Any]]:
+def qpv_verifiers(doc) -> List[Dict[str, Any]]:
     vs = [p for p in doc["participants"] if p["id"] in verifier_ids(doc)]
     kinds = [p["automaton"] for p in vs]
     if not vs or kinds[0] != "qpv_verifier_quantum" or any(k != "qpv_verifier_classical" for k in kinds[1:]):
@@ -101,7 +101,7 @@ def _qpv_verifiers(doc) -> List[Dict[str, Any]]:
 
 
 def _add_answerers(doc, answerer, policy, processing_ns, displacement_m):
-    vs = _qpv_verifiers(doc)
+    vs = qpv_verifiers(doc)
     n, claim = len(vs), doc["claim"]["position"]
     combine = vs[0]["params"].get("combine", "xor")
     radius = max(math.dist(v["position"], claim) for v in vs) or 1.0
@@ -193,7 +193,7 @@ def build(dim: int = 2, verifiers: Optional[int] = None, radius_m: float = 3.0, 
 def switch_attack(project: Dict[str, Any], attack: str, policy: str = "breidbart") -> Dict[str, Any]:
     """Replace whoever answers at the claim (prover or attackers) and rewire; verifiers stay as they are."""
     doc = normalize(copy.deepcopy(project))
-    keep = {v["id"] for v in _qpv_verifiers(doc)}
+    keep = {v["id"] for v in qpv_verifiers(doc)}
     gone = {p["id"] for p in doc["participants"] if p["id"] not in keep}
     doc["participants"] = [p for p in doc["participants"] if p["id"] in keep]
     doc["resources"] = [r for r in doc["resources"] if r["type"] != "epr"]

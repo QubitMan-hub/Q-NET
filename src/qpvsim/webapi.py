@@ -24,10 +24,14 @@ from . import __version__
 from .console import Console, _strip_runs
 from .experiments import results_to_csv, run_experiment
 from .library import EXAMPLES, automaton_library, example
-from .protocol.automaton import ACTIONS, TRIGGER_TYPES
+from .protocol.automaton import ACTIONS, TRIGGER_TYPES, port_kinds
 from .protocol.capabilities import ROLE_PROFILES, profile_catalog
 from .protocol.expr import ENGINE_FUNCTIONS, PURE_FUNCTIONS
-from .protocol.project import normalize, validate_project
+from .protocol.project import normalize, participant, validate_project, verifier_ids, verifier_type
+from .qpv import lightcone, presets, scenario
+from .qpv import timing as qtiming
+from .qpv.automata import COMBINES
+from .qpv.geometry import dimension
 from .quantum import backend_catalog
 from .session import Session, SessionError
 
@@ -71,6 +75,12 @@ class WebAPI:
         R("GET", r"/api/sim/export", self.export_trace)
         R("POST", r"/api/console", self.run_console)
         R("GET", r"/api/console/complete", self.complete)
+        R("GET", r"/api/qpv/analysis", self.qpv_analysis)
+        R("GET", r"/api/qpv/scenarios", self.qpv_scenarios)
+        R("POST", r"/api/qpv/scenario", self.qpv_scenario)
+        R("POST", r"/api/qpv/attack", self.qpv_attack)
+        R("POST", r"/api/qpv/autowire", self.qpv_autowire)
+        R("POST", r"/api/qpv/lightcone", self.qpv_lightcone)
         R("POST", r"/api/experiments", self.start_experiment)
         R("GET", r"/api/experiments/(?P<job>\w+)", self.get_experiment)
         R("POST", r"/api/experiments/(?P<job>\w+)/cancel", self.cancel_experiment)
@@ -117,8 +127,12 @@ class WebAPI:
 
     def _project_payload(self, issues=None) -> Dict[str, Any]:
         S = self.session
-        return {"project": S.project, "issues": S.validate() if issues is None else issues,
-                "revision": S.revision, "sim_error": S.sim_error}
+        p = S.project
+        return {"project": p, "issues": S.validate() if issues is None else issues,
+                "revision": S.revision, "sim_error": S.sim_error,
+                "ports": {q["id"]: {k: sorted(v) for k, v in port_kinds(p["automata"].get(q["automaton"]) or {}).items()}
+                          for q in p["participants"]},
+                "verifier_types": {v: verifier_type(p, participant(p, v)) for v in verifier_ids(p) if participant(p, v)}}
 
     def get_project(self, **_) -> Result:
         return self.ok(self._project_payload())
@@ -139,6 +153,54 @@ class WebAPI:
 
     def export_project(self, **_) -> Result:
         return self.ok(self.session.project)
+
+    # ------------------------------------------------------------ QPV
+    def qpv_analysis(self, **_) -> Result:
+        p = self.session.project
+        try:
+            timing = qtiming.table(p)
+        except Exception as exc:  # an invalid project cannot run
+            timing = {"rows": [], "issues": [str(exc)]}
+        try:
+            scenario.qpv_verifiers(p)
+            qpv = True
+        except ValueError:
+            qpv = False
+        return self.ok({"dimension": dimension(p), "qpv": qpv, "timing": timing,
+                        "references": {a: presets.reference(p, a) for a in scenario.ANSWERERS},
+                        "default_tau_ns": lightcone.default_tau_ns(p)})
+
+    def qpv_scenarios(self, **_) -> Result:
+        return self.ok({"ready": scenario.READY, "answerers": {a: scenario.LABELS[a] for a in scenario.ANSWERERS},
+                        "provers": scenario.PROVERS, "attacks": scenario.ATTACKS, "policies": scenario.POLICIES,
+                        "combines": COMBINES, "presets": presets.PRESETS})
+
+    def _install(self, doc) -> Result:
+        self.session.set_project(doc)
+        return self.ok(self._project_payload())
+
+    def qpv_scenario(self, body=None, **_) -> Result:
+        body = dict(body or {})
+        if "id" in body:
+            body = next((r["args"] for r in scenario.READY if r["id"] == body["id"]), None)
+            if body is None:
+                raise NotFound("no such ready-made scenario")
+        return self._install(scenario.build(**body))
+
+    def qpv_attack(self, body=None, **_) -> Result:
+        body = body or {}
+        return self._install(scenario.switch_attack(self.session.project, body.get("attack", ""),
+                                                    body.get("policy", "breidbart")))
+
+    def qpv_autowire(self, **_) -> Result:
+        return self._install(scenario.autowire(self.session.project))
+
+    def qpv_lightcone(self, body=None, **_) -> Result:
+        body = body or {}
+        p = self.session.project
+        if body.get("point") is not None:
+            return self.ok(lightcone.point(p, body["point"], body.get("tau_ns")))
+        return self.ok(lightcone.grid(p, int(body.get("n", 96)), body.get("tau_ns"), body.get("z"), body.get("bounds")))
 
     # ------------------------------------------------------------ simulation
     def reset(self, body=None, **_) -> Result:

@@ -32,7 +32,8 @@ def test_catalog_drives_groups_starters_and_views():
     c = con()
     cat = c.catalog()
     assert len({x["name"] for x in cat}) == len(cat)  # each command once, aliases listed inside
-    assert [x["name"] for x in cat if x["starter"]] == ["run", "step", "next", "decision", "participants", "help"]
+    assert [x["name"] for x in cat if x["starter"]] == ["run", "step", "next", "timing", "decision", "participants",
+                                                         "help"]
     assert c.execute("why").view == "decision" and c.execute("help").view == "help"
     for x in cat:
         for alias in x["aliases"]:
@@ -58,12 +59,10 @@ def test_unknown_command_suggests_the_closest_name():
     assert not r.ok and "Did you mean run?" in r.output
 
 
-def test_timing_reports_answer_margin_against_the_deadline():
-    c = con()
-    ok(c, "run")
-    r = ok(c, "timing V0")
-    assert "margin +0.300000 ns vs timer 'deadline'" in r.output  # tolerance 0.5 - processing 0.2
-    assert r.data["V0"]["verdict"]["outcome"] == "accept"
+def test_timing_reports_slack_against_the_deadline():
+    r = ok(con(), "timing")
+    assert r.data["rows"][0]["slack_fs"] == 300_000  # tolerance 0.5 ns - prover processing 0.2 ns
+    assert "  V0    quantum" in r.output and not r.refs
 
 
 def test_geometry_gives_light_travel_times():
