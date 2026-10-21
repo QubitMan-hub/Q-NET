@@ -11,7 +11,7 @@ const URL_ = process.argv[2] ?? "http://127.0.0.1:8800/Q-NET/";
 const SHOTS = process.argv[3] ?? "e2e/screenshots";
 const failures = [];
 const check = (c, m) => { if (!c) { failures.push(m); console.error("FAIL", m); } else console.log("ok  ", m); };
-const proxy = process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY, bypass: "127.0.0.1,localhost," + new URL(URL_).hostname } : undefined;
+const proxy = process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY, bypass: "127.0.0.1,localhost" + (/^[\d.]+$/.test(new URL(URL_).hostname) ? "," + new URL(URL_).hostname : "") } : undefined;
 const browser = await chromium.launch({ headless: true, proxy });
 const page = await browser.newPage({ viewport: { width: 1600, height: 940 }, ignoreHTTPSErrors: true });
 await page.addInitScript(() => { try { localStorage.setItem("qpv.welcome.dismissed", "1"); } catch {} });
