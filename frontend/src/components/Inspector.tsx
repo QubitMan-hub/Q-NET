@@ -72,12 +72,12 @@ function ProjectInspector({ p }: { p: Project }) {
           onCommit={(v) => edit((d) => { d.meta.protocol.references = v.split("\n").filter(Boolean); })} /></Field>
       </Section>
       <Section title="Claim and verification">
-        <Field label="Claimed x (m)"><NumberInput value={p.claim.position[0] ?? 0} step={0.1} onCommit={(v) => edit((d) => { d.claim.position[0] = v ?? 0; })} /></Field>
-        <Field label="Claimed prover">
+        <Field label="Claimed x (m)" title={GLOSSARY.claim}><NumberInput value={p.claim.position[0] ?? 0} step={0.1} onCommit={(v) => edit((d) => { d.claim.position[0] = v ?? 0; })} /></Field>
+        <Field label="Claimed prover" title={GLOSSARY.claimed_prover}>
           <Select value={p.claim.prover ?? ""} options={[{ value: "", label: "(none: attack scenario)" }, ...ids.map((i) => ({ value: i, label: i }))]}
             onChange={(v) => edit((d) => { d.claim.prover = v || null; })} />
         </Field>
-        <Field label="Decision rule">
+        <Field label="Decision rule" title={GLOSSARY.rule}>
           <Select value={p.verification.rule} options={[{ value: "all", label: "all verifiers accept" }, { value: "any", label: "any verifier accepts" }, { value: "k_of_n", label: "k of n accept" }]}
             onChange={(v) => edit((d) => { d.verification.rule = v; if (v === "k_of_n" && !d.verification.k) d.verification.k = 1; })} />
         </Field>
@@ -91,14 +91,14 @@ function ProjectInspector({ p }: { p: Project }) {
         <Field label="Signal speed" title="metres per second; the default is the exact SI speed of light">
           <NumberInput value={p.physics.signal_speed_mps} onCommit={(v) => edit((d) => { d.physics.signal_speed_mps = v ?? 299792458; })} />
         </Field>
-        <Field label="Backend">
+        <Field label="Backend" title={GLOSSARY.backend}>
           <Select value={p.simulation.backend} options={Object.keys(meta?.backends ?? { density_matrix: 1 })}
             onChange={(v) => edit((d) => { d.simulation.backend = v; })} />
         </Field>
         <div className="note" style={{ marginBottom: 6 }}>{meta?.backends?.[p.simulation.backend]?.formalism}</div>
-        <Field label="Seed"><NumberInput value={p.simulation.seed} step={1} min={0} onCommit={(v) => edit((d) => { d.simulation.seed = Math.round(v ?? 0); })} /></Field>
-        <Field label="Max time (ns)"><NumberInput value={p.simulation.max_time_ns} min={0} onCommit={(v) => edit((d) => { d.simulation.max_time_ns = v ?? 1000; })} /></Field>
-        <Field label="Stop when">
+        <Field label="Seed" title={GLOSSARY.seed}><NumberInput value={p.simulation.seed} step={1} min={0} onCommit={(v) => edit((d) => { d.simulation.seed = Math.round(v ?? 0); })} /></Field>
+        <Field label="Max time (ns)" title={GLOSSARY.max_time}><NumberInput value={p.simulation.max_time_ns} min={0} onCommit={(v) => edit((d) => { d.simulation.max_time_ns = v ?? 1000; })} /></Field>
+        <Field label="Stop when" title={GLOSSARY.stop_when}>
           <Select value={p.simulation.stop_when} options={[{ value: "verifiers_decided", label: "all verifiers decided" }, { value: "quiescent", label: "no events remain" }]}
             onChange={(v) => edit((d) => { d.simulation.stop_when = v; })} />
         </Field>
@@ -175,7 +175,7 @@ function ParticipantInspector({ p, project }: { p: ParticipantSpec; project: Pro
               })} />
           </Field>
         )}
-        <Field label="Position x, y (m)">
+        <Field label="Position x, y (m)" title={GLOSSARY.position}>
           <div className="row">
             <NumberInput value={p.position[0] ?? 0} step={0.1} ariaLabel="x position" onCommit={(v) => upd((q) => { q.position[0] = v ?? 0; })} />
             <NumberInput value={p.position[1] ?? 0} step={0.1} ariaLabel="y position" onCommit={(v) => upd((q) => { q.position[1] = v ?? 0; })} />
@@ -185,14 +185,14 @@ function ParticipantInspector({ p, project }: { p: ParticipantSpec; project: Pro
           <NumberInput value={p.processing_ns} step={0.05} min={0} onCommit={(v) => upd((q) => { q.processing_ns = v ?? 0; })} />
         </Field>
         <Advanced>
-          <Field label="Start at (ns)"><NumberInput value={p.start_ns} step={1} min={0} onCommit={(v) => upd((q) => { q.start_ns = v ?? 0; })} /></Field>
+          <Field label="Start at (ns)" title={GLOSSARY.start}><NumberInput value={p.start_ns} step={1} min={0} onCommit={(v) => upd((q) => { q.start_ns = v ?? 0; })} /></Field>
           <Field label="Clock offset (ns)" title={GLOSSARY.clock}><NumberInput value={p.clock.offset_ns} step={0.1} onCommit={(v) => upd((q) => { q.clock.offset_ns = v ?? 0; })} /></Field>
           <Field label="Clock drift (ppm)" title={GLOSSARY.clock}><NumberInput value={p.clock.drift_ppm} step={1} onCommit={(v) => upd((q) => { q.clock.drift_ppm = v ?? 0; })} /></Field>
-          <Field label="Coalition"><TextInput value={p.group ?? ""} placeholder="none" onCommit={(v) => upd((q) => { q.group = v || null; })} /></Field>
+          <Field label="Coalition" title={GLOSSARY.coalition}><TextInput value={p.group ?? ""} placeholder="none" onCommit={(v) => upd((q) => { q.group = v || null; })} /></Field>
         </Advanced>
       </Section>
       <Section title="Strategy (automaton)" aside={<button className="btn ghost" onClick={() => setView("automaton")}>Open</button>}>
-        <Field label="Automaton">
+        <Field label="Automaton" title={GLOSSARY.automaton}>
           <Select value={p.automaton} options={automata} onChange={(v) => edit((d) => {
             if (!ensureAutomaton(d, v)) throw new Error(`Unknown automaton ${v}`);
             d.participants.find((x) => x.id === p.id)!.automaton = v;
@@ -275,7 +275,7 @@ function LinkInspector({ id, project }: { id: string; project: Project }) {
     <>
       <Section title={<><span className={`chan ${l.kind}`} style={{ display: "inline-block", marginRight: 8, verticalAlign: 3 }} />Link {l.id}</>}
         aside={<button className="btn ghost danger" onClick={() => deleteSelection()}><Icon.trash /></button>}>
-        <Field label="Kind"><Select value={l.kind} options={["quantum", "classical"]} onChange={(v) => upd((x) => { x.kind = v; })} /></Field>
+        <Field label="Kind" title={GLOSSARY[`${l.kind}_link`]}><Select value={l.kind} options={["quantum", "classical"]} onChange={(v) => upd((x) => { x.kind = v; })} /></Field>
         {(["a", "b"] as const).map((end) => (
           <Field key={end} label={`Endpoint ${end.toUpperCase()}`}>
             <div className="row">
@@ -295,9 +295,9 @@ function LinkInspector({ id, project }: { id: string; project: Project }) {
         <Field label="Speed (m/s)" title="Empty = project signal speed"><NumberInput value={l.speed_mps} allowNull nullLabel="project speed" min={0} onCommit={(v) => upd((x) => { x.speed_mps = v; })} /></Field>
         <Advanced>
           <Field label="Latency (ns)" title={GLOSSARY.latency}><NumberInput value={l.latency_ns} min={0} step={0.1} onCommit={(v) => upd((x) => { x.latency_ns = v ?? 0; })} /></Field>
-          <Field label="Jitter (ns)"><NumberInput value={l.jitter_ns} min={0} step={0.1} onCommit={(v) => upd((x) => { x.jitter_ns = v ?? 0; })} /></Field>
-          <Field label="Loss probability"><NumberInput value={l.loss_prob} min={0} max={1} step={0.05} onCommit={(v) => upd((x) => { x.loss_prob = v ?? 0; })} /></Field>
-          <Field label="Attenuation (dB/km)"><NumberInput value={l.attenuation_db_per_km} min={0} step={0.1} onCommit={(v) => upd((x) => { x.attenuation_db_per_km = v ?? 0; })} /></Field>
+          <Field label="Jitter (ns)" title={GLOSSARY.jitter}><NumberInput value={l.jitter_ns} min={0} step={0.1} onCommit={(v) => upd((x) => { x.jitter_ns = v ?? 0; })} /></Field>
+          <Field label="Loss probability" title={GLOSSARY.loss}><NumberInput value={l.loss_prob} min={0} max={1} step={0.05} onCommit={(v) => upd((x) => { x.loss_prob = v ?? 0; })} /></Field>
+          <Field label="Attenuation (dB/km)" title={GLOSSARY.attenuation}><NumberInput value={l.attenuation_db_per_km} min={0} step={0.1} onCommit={(v) => upd((x) => { x.attenuation_db_per_km = v ?? 0; })} /></Field>
         </Advanced>
       </Section>
       <Section title="Noise">
@@ -343,7 +343,7 @@ function StateInspector({ automaton, id, project }: { automaton: string; id: str
           x.kind = v as any;
           if (v === "initial") { aa.states.forEach((o) => { if (o.id !== id && o.kind === "initial") o.kind = "normal"; }); aa.initial = id; }
         })} /></Field>
-        {st.kind === "terminal" && <Field label="Outcome"><Select value={st.outcome ?? "done"} options={["accept", "reject", "abort", "done"]} onChange={(v) => upd((x) => { x.outcome = v; })} /></Field>}
+        {st.kind === "terminal" && <Field label="Outcome" title={GLOSSARY.outcome}><Select value={st.outcome ?? "done"} options={["accept", "reject", "abort", "done"]} onChange={(v) => upd((x) => { x.outcome = v; })} /></Field>}
         <Field label="Description" stack><TextArea value={st.description ?? ""} onCommit={(v) => upd((x) => { x.description = v; })} /></Field>
         <div className="note">Outgoing transitions are tried in list order; the first whose trigger is satisfied and guard is true fires.</div>
       </Section>

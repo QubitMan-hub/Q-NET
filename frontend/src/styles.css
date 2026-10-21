@@ -468,7 +468,6 @@ table.grid td.k { font-family: var(--font-code); font-size: 11.5px; white-space:
 .cx-item span { font-size: var(--fs-xs); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ------------------------------------------------------------ spacetime & charts */
-.st-wrap { position: absolute; inset: 0; overflow: hidden; }
 .st-legend { position: absolute; right: 10px; top: 8px; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--r-m);
   padding: 6px 9px; font-size: var(--fs-xs); display: grid; gap: 3px; z-index: 2; }
 .st-legend .row { gap: 8px; }
@@ -525,9 +524,6 @@ svg .tick { font-family: var(--font-code); font-size: 10px; fill: var(--ink-3); 
 }
 .welcome h2 { margin: 0 0 6px; font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.01em; }
 .welcome p { margin: 0 0 12px; color: var(--ink-2); line-height: 1.55; font-size: var(--fs-m); }
-.welcome ol { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 8px; }
-.welcome li { padding-left: 2px; }
-.welcome li > span { display: block; margin-bottom: 4px; font-size: var(--fs-m); }
 .welcome .welcome-note { font-size: var(--fs-s); color: var(--ink-3); }
 
 @media (max-width: 760px) {
