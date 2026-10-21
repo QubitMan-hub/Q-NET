@@ -24,8 +24,7 @@ An automaton specification (JSON) has::
     }
 
 Transitions leaving a state are tried in list order; the first whose trigger
-is satisfied and whose guard is true fires (deterministic priority).  See
-docs/PROTOCOL_DSL.md for the action reference.
+is satisfied and whose guard is true fires (deterministic priority).
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
-from .expr import ENGINE_FUNCTIONS, PURE_FUNCTIONS, ExprError, functions_used, names_used, validate_syntax
+from .expr import ENGINE_FUNCTIONS, PURE_FUNCTIONS, functions_used, names_used, validate_syntax
 
 TRIGGER_TYPES = {"start", "timer", "receive", "auto"}
 STATE_KINDS = {"initial", "normal", "terminal"}

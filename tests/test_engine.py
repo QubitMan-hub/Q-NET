@@ -1,7 +1,6 @@
 """Engine semantics: reference traces, timing, deadlines, clocks, capabilities, loss, reproducibility."""
 
 import copy
-import math
 
 import pytest
 from hypothesis import given, settings, strategies as st
@@ -38,7 +37,7 @@ def test_honest_reference_trace_hand_calculated():
     th = sends[("V1", "theta")]
     assert q.depart_time == emit and th.depart_time == emit
     assert q.arrival_time == th.arrival_time == emit + D3 == tu.ns(20)  # simultaneous at the claim
-    a0 = sends[("P", "answer")]
+    assert ("P", "answer") in sends
     answers = [m for m in sim.messages.values() if m.src == "P"]
     assert {m.depart_time for m in answers} == {tu.ns(20) + tu.ns("0.2")}
     assert {m.arrival_time for m in answers} == {tu.ns("20.2") + D3}

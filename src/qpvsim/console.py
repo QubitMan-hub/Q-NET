@@ -19,7 +19,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import timeunits as tu
 from .library import EXAMPLES, automaton_library
-from .protocol.capabilities import PROFILES, profile_catalog
+from .protocol.capabilities import PROFILES, make_capabilities
 from .session import Session, SessionError, dump_json
 
 
@@ -133,7 +133,7 @@ class Console:
             return ConsoleResult(True, out, data, line)
         except TypeError:
             return ConsoleResult(False, f"'{cmd.name}' needs different arguments.\nusage: {cmd.usage}\n{cmd.help}", None, line)
-        except (SessionError, KeyError, ValueError, RuntimeError) as exc:
+        except (SessionError, KeyError, ValueError, RuntimeError, IndexError, AttributeError) as exc:
             msg = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
             return ConsoleResult(False, f"{msg}", None, line)
 
@@ -241,13 +241,10 @@ class Console:
         @self._cmd("links", "links", "Channels between participants, with length and delay.")
         def _links():
             s = sim()
-            rows, seen = [], set()
-            for (node, port, kind), ol in s.out_links.items():
-                lid = ol.link["id"]
-                rows.append(f"  {lid:<6} {kind:<9} {node}.{port} -> {ol.dst}.{ol.dst_port}  "
-                            f"{ol.distance_m:.6g} m  delay {tu.fmt(ol.base_delay_fs + ol.latency_fs)}")
-                seen.add(lid)
-            return "\n".join(rows), [l for l in S.project["links"]]
+            rows = [f"  {ol.link['id']:<6} {kind:<9} {node}.{port} -> {ol.dst}.{ol.dst_port}  "
+                    f"{ol.distance_m:.6g} m  delay {tu.fmt(ol.base_delay_fs + ol.latency_fs)}"
+                    for (node, port, kind), ol in s.out_links.items()]
+            return "\n".join(rows), list(S.project["links"])
 
         @self._cmd("queue", "queue [n]", "What will happen next, in order.", ["pending"])
         def _queue(n="20"):
@@ -358,9 +355,7 @@ class Console:
             if profile:
                 S.edit(f"participants.{pid}.capabilities", profile)
                 return f"{pid} capability profile = {profile}; simulation reset", None
-            return json.dumps(profile_catalog().get(
-                S.get(f"participants.{pid}.capabilities") if isinstance(S.get(f"participants.{pid}.capabilities"), str)
-                else "unrestricted"), indent=2), None
+            return json.dumps(make_capabilities(S.get(f"participants.{pid}.capabilities")).as_dict(), indent=2), None
 
         @self._cmd("batch", "batch <runs> [seed=<s>] [sweep=<path>:v1,v2,...] [workers=<n>]",
                    "Repeat the run many times and report acceptance rates.", ["sweep"])

@@ -138,6 +138,8 @@ def basis_name(basis, angle=None) -> str:
         return "X"
     if basis in ("Y", "y"):
         return "Y"
+    if angle is None:
+        raise QuantumError(f"basis {basis!r} needs an angle")
     return f"angle({angle:.6g})"
 
 
@@ -231,7 +233,6 @@ class QuantumBackend(ABC):
         self.rng = rng
         self.max_group = max_group
         self._next = 1
-        self.op_count = 0
 
     def _new_id(self) -> int:
         q = self._next

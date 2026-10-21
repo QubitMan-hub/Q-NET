@@ -10,8 +10,8 @@ Both procedures are exact **in distribution**: averaged over the backend's
 randomness, every observable statistic of the remaining qubits equals the
 density-matrix prediction.  A single run is one sample of the unravelled
 ensemble, so per-run reduced states shown in the inspector are pure even where
-the density-matrix backend would show a mixed state.  This is documented in
-docs/QUANTUM_MODEL.md and checked statistically in tests/test_quantum.py.
+the density-matrix backend would show a mixed state.  This is
+checked statistically in tests/test_quantum.py.
 """
 
 from __future__ import annotations
@@ -68,7 +68,6 @@ class StateVectorBackend(QuantumBackend):
         g = _Group(qs, ket)
         for q in qs:
             self._group_of[q] = g
-        self.op_count += 1
         return tuple(qs)
 
     def exists(self, q: int) -> bool:
@@ -136,7 +135,6 @@ class StateVectorBackend(QuantumBackend):
         axes = [g.qubits.index(q) for q in qubits]
         t = apply_matrix_to_axes(g.psi.reshape([2] * g.n), U, axes)
         g.psi = t.reshape(-1)
-        self.op_count += 1
 
     def apply_channel(self, qubits: Sequence[int], kraus: Iterable[np.ndarray]) -> None:
         g = self._merge(qubits)
@@ -160,14 +158,12 @@ class StateVectorBackend(QuantumBackend):
                 choice = i
                 break
         g.psi = cands[choice] / np.sqrt(probs[choice])
-        self.op_count += 1
 
     def measure(self, q: int, basis: np.ndarray) -> int:
         g = self._g(q)
         outcome = self._measure_idx(g, q, basis)
         b = basis[:, outcome].astype(complex).copy()
         self._group_of[q] = _Group([q], b)
-        self.op_count += 1
         return outcome
 
     def group_of(self, q: int) -> Tuple[int, ...]:

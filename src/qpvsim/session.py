@@ -17,7 +17,7 @@ from .engine import ENGINE_VERSION, Simulation
 from .experiments import provenance, run_experiment
 from .invariants import check_trace
 from .library import automaton_library, example
-from .protocol.project import (ProjectError, errors, get_path, load_project, normalize,
+from .protocol.project import (ProjectError, get_path, load_project, normalize,
                                save_project, set_path, validate_project)
 
 

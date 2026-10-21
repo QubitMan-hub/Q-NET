@@ -10,12 +10,8 @@ checks automata statically so mismatches are reported before running.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, FrozenSet, Optional
-
-ALL_GATES = frozenset({"I", "X", "Y", "Z", "H", "S", "SDG", "T", "CNOT", "CX", "CZ", "SWAP",
-                       "RX", "RY", "RZ"})
-ALL_BASES = frozenset({"Z", "X", "Y", "angle"})
 
 
 class CapabilityViolation(RuntimeError):

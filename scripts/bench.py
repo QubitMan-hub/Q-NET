@@ -3,7 +3,6 @@
     python scripts/bench.py            # prints a table; numbers are machine-dependent
 """
 
-import copy
 import time
 
 import numpy as np

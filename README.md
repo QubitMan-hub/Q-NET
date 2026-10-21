@@ -1,19 +1,21 @@
 # QPV Workbench
 
-An event-driven, quantum-capable, adversary-aware simulation workbench for **Quantum Position Verification**. You design protocols visually, run them in a deterministic engine with exact femtosecond timing, inspect every transition and timestamp, attack them with capability-limited colluding adversaries, and run reproducible experiments.
+An event-driven, quantum-capable simulation workbench for Quantum Position Verification: design protocols as state machines, run them with exact femtosecond timing, attack them with capability-limited adversaries, and run repeatable experiments. Simulation results describe the modelled protocol only; they are not security proofs.
 
-**Use it in your browser, nothing to install:** <https://qubitman-hub.github.io/Q-NET/>
-(the Python engine runs in the page via Pyodide; the first visit downloads about 15 MB).
+Use it in the browser: <https://qubitman-hub.github.io/Q-NET/>
 
-Or run it locally:
+Install and run locally:
 
 ```bash
 pip install -e ".[server,test]"
-qpv serve            # open http://127.0.0.1:8765
+qpv serve              # open http://127.0.0.1:8765
+qpv run qpv_bb84_honest   # headless run of a bundled example
 ```
 
-**All documentation is in [`docs/`](docs/README.md)**: the start guide, architecture, semantics, protocol language, quantum model, reference protocols with results, API and console reference, the validation report, limitations and roadmap, and the research report.
+Test:
 
-Simulation results describe the modelled protocol only; they are not security proofs.
+```bash
+python -m pytest
+```
 
 Licence: Apache-2.0.

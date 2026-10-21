@@ -21,7 +21,7 @@ import heapq
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterator, List, Optional
 
-# Lower number = earlier within one timestamp.  Rationale (docs/SEMANTICS.md):
+# Lower number = earlier within one timestamp.  Rationale:
 # deliveries are processed before timers that expire at the same instant, so a
 # response arriving *exactly* at a deadline counts as on time (inclusive
 # deadlines); transition completions precede timers for the same reason.
@@ -127,11 +127,6 @@ class Scheduler:
         self._events[ev.id] = ev
         heapq.heappush(self._heap, (ev.time, ev.priority, ev.seq, ev.id))
         return ev
-
-    def schedule_in(self, delay: int, kind: str, **kw) -> Event:
-        if delay < 0:
-            raise SchedulingError("negative delay")
-        return self.schedule(self.now + delay, kind, **kw)
 
     def cancel(self, event_id: int) -> bool:
         ev = self._events.get(event_id)

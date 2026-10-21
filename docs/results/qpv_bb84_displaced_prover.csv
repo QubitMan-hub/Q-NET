@@ -1,3 +1,0 @@
-point,assignment,n,accepted,acceptance,ci_lo,ci_hi,verifier,v_accept,timeouts,wrong,errors,rtt_mean_ns,rtt_std_ns
-0,"",500,0,0.000000,0.000000,0.007624,V0,1.000000,0,0,0,20.213845999999997,3.556271730447175e-15
-0,"",500,0,0.000000,0.000000,0.007624,V1,0.000000,500,0,0,,

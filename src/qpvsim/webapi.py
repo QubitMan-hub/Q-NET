@@ -12,6 +12,7 @@ Each call returns ``(status, payload, kind)`` where ``kind`` is ``"json"`` or
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import threading
@@ -187,7 +188,7 @@ class WebAPI:
         if not self.allow_parallel:
             exp["workers"] = 1
         job_id = uuid.uuid4().hex[:10]
-        project = self.session.project
+        project = copy.deepcopy(self.session.project)
         job = {"id": job_id, "status": "running", "done": 0, "total": None, "result": None,
                "error": None, "cancel": False}
         self.jobs[job_id] = job

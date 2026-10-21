@@ -1,6 +1,6 @@
 """qpvsim — an event-driven, quantum-capable, adversary-aware QPV simulation workbench.
 
-Public API (see docs/API.md)::
+Public API::
 
     from qpvsim import Simulation, load_project, example, run_experiment
     sim = Simulation(example("qpv_bb84_honest")).run()

@@ -6,7 +6,7 @@ product state, so memory is ``O(sum 4^n_g)`` rather than ``4^N``.  Groups are
 merged (Kronecker product) when a multi-qubit operation touches several, and a
 measured qubit is split off again (it is in a product state after a
 projective measurement).  This mirrors the state-merging strategy described for
-NetSquid's ``QState`` and SeQUeNCe's quantum manager (docs/REA_REPORT.md).
+NetSquid's ``QState`` and SeQUeNCe's quantum manager.
 
 Semantics: exact Born-rule sampling for measurements, exact CPTP maps for
 channels (Kraus sum), exact partial trace for discards.  Limits: a single group
@@ -75,7 +75,6 @@ class DensityMatrixBackend(QuantumBackend):
         g = _Group(qs, np.outer(ket, ket.conj()))
         for q in qs:
             self._group_of[q] = g
-        self.op_count += 1
         return tuple(qs)
 
     def exists(self, q: int) -> bool:
@@ -133,7 +132,6 @@ class DensityMatrixBackend(QuantumBackend):
         t = apply_matrix_to_axes(t, U, axes)
         t = apply_matrix_to_axes(t, U.conj(), [n + a for a in axes])
         g.rho = t.reshape(2 ** n, 2 ** n)
-        self.op_count += 1
 
     def apply_channel(self, qubits: Sequence[int], kraus: Iterable[np.ndarray]) -> None:
         kraus = [np.asarray(k, dtype=complex) for k in kraus]
@@ -147,7 +145,6 @@ class DensityMatrixBackend(QuantumBackend):
             t = apply_matrix_to_axes(t, K.conj(), [n + a for a in axes])
             acc = acc + t
         g.rho = acc.reshape(2 ** n, 2 ** n)
-        self.op_count += 1
 
     def measure(self, q: int, basis: np.ndarray) -> int:
         g = self._g(q)
@@ -176,7 +173,6 @@ class DensityMatrixBackend(QuantumBackend):
             self._group_of[q] = _Group([q], P.copy())
         else:
             g.rho = P.copy()
-        self.op_count += 1
         return outcome
 
     # -- inspection -------------------------------------------------------
@@ -193,7 +189,7 @@ class DensityMatrixBackend(QuantumBackend):
                 continue
             seen.add(id(g))
             keep = [x for x in g.qubits if x in qubits]
-            rho, n = g.rho, g.n
+            rho = g.rho
             current = list(g.qubits)
             for x in list(current):
                 if x not in keep:

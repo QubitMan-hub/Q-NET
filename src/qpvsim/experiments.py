@@ -27,7 +27,6 @@ from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-from . import timeunits as tu
 from .decision import decide
 from .engine import ENGINE_VERSION, Simulation
 from .protocol.project import normalize, set_path, validate_project, errors, ProjectError
@@ -160,10 +159,10 @@ def run_experiment(project: Dict[str, Any], exp: Dict[str, Any],
             # imported lazily: multiprocessing is unavailable in the browser build (Pyodide)
             from concurrent.futures import ProcessPoolExecutor
             chunks = [seeds[i::workers] for i in range(workers)]
+            raw = [None] * runs
             with ProcessPoolExecutor(max_workers=workers) as pool:
-                for res in pool.map(_run_chunk, [(doc, c) for c in chunks]):
-                    raw.extend(res)
-            raw.sort(key=lambda r: seeds.index(r["seed"]))
+                for i, res in enumerate(pool.map(_run_chunk, [(doc, c) for c in chunks])):
+                    raw[i::workers] = res
             done += runs
             if progress:
                 progress(done, total)

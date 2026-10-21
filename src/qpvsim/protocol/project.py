@@ -3,7 +3,7 @@
 A project is a plain JSON document (``format: "qpvsim-project"``,
 ``version: 1``) that fully determines a simulation: participants, geometry,
 links, resources, automata, verification rule, backend and seed.  The UI edits
-this document; the engine compiles and executes it.  See docs/PROJECT_FORMAT.md.
+this document; the engine compiles and executes it.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Union
 from ..quantum import BACKENDS
 from ..timeunits import SPEED_OF_LIGHT_MPS
 from .automaton import Issue, automaton_operations, validate_automaton
-from .capabilities import PROFILES, make_capabilities
+from .capabilities import make_capabilities
 from .expr import validate_syntax
 
 FORMAT = "qpvsim-project"
@@ -127,10 +127,6 @@ def link_length_m(project: Dict[str, Any], link: Dict[str, Any]) -> float:
     a = participant(project, link["a"]["node"])
     b = participant(project, link["b"]["node"])
     return math.dist(a["position"], b["position"])
-
-
-def resolve_automaton(project: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
-    return project["automata"].get(name)
 
 
 def verifier_ids(project: Dict[str, Any]) -> List[str]:
@@ -278,10 +274,13 @@ def validate_project(project: Dict[str, Any]) -> List[Issue]:
                 if link["length_m"] + 1e-9 < straight and not allow_ftl:
                     err(f"{lp}.length_m", f"length {link['length_m']} m is shorter than the straight-line "
                                            f"distance {straight:.6g} m (implies faster-than-light signalling)")
-        for fld in ("loss_prob",):
+        v = link.get("loss_prob", 0)
+        if not isinstance(v, (int, float)) or not 0 <= v <= 1:
+            err(f"{lp}.loss_prob", "must be a probability in [0, 1]")
+        for fld in ("latency_ns", "jitter_ns", "attenuation_db_per_km"):
             v = link.get(fld, 0)
-            if not isinstance(v, (int, float)) or not 0 <= v <= 1:
-                err(f"{lp}.{fld}", "must be a probability in [0, 1]")
+            if not isinstance(v, (int, float)) or v < 0:
+                err(f"{lp}.{fld}", "must be a non-negative number")
         for k, v in (link.get("noise") or {}).items():
             if k not in ("depolarizing", "dephasing", "amplitude_damping", "bitflip"):
                 err(f"{lp}.noise.{k}", "unknown noise channel")
@@ -333,6 +332,11 @@ def validate_project(project: Dict[str, Any]) -> List[Issue]:
     cpos = claim.get("position")
     if not isinstance(cpos, list) or not cpos:
         err("claim.position", "claimed position must be a list of coordinates")
+    dims = {len(p["position"]) for p in project["participants"] if isinstance(p.get("position"), list)}
+    if isinstance(cpos, list):
+        dims.add(len(cpos))
+    if len(dims) > 1:
+        err("participants", "all positions (and the claim) must have the same number of coordinates")
 
     ver = project["verification"]
     if ver.get("rule", "all") not in ("all", "any", "k_of_n"):

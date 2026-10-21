@@ -216,7 +216,7 @@ def test_patch_application_by_id():
 def test_reloading_an_example_restarts_a_finished_run(client):
     client.post("/api/sim/run", json={})
     assert client.get("/api/sim/state").json()["stopped"]
-    s = client.post("/api/project/example/qpv_bb84_honest").json()
+    client.post("/api/project/example/qpv_bb84_honest")
     st = client.get("/api/sim/state").json()
     assert st["events_executed"] == 0 and not st["stopped"]
 

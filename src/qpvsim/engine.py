@@ -6,7 +6,7 @@ links and resources, then executes it through the discrete-event
 messages, timestamps, decisions) is produced here and recorded in an
 append-only trace; the UI, console and experiment runner only read it.
 
-Execution model (docs/SEMANTICS.md):
+Execution model:
 
 1. A participant reacts to *stimuli*: its start event, message deliveries and
    timer expiries.  Delivered messages wait in its mailbox; expired timers wait
@@ -248,7 +248,6 @@ class Simulation:
         self.counters = {"classical_sent": 0, "quantum_sent": 0, "lost": 0, "transitions": 0,
                          "quantum_ops": 0, "measurements": 0, "capability_violations": 0,
                          "protocol_errors": 0}
-        self._listeners: List[Callable[[TraceRecord], None]] = []
         self._build()
 
     # ------------------------------------------------------------ build
@@ -321,12 +320,7 @@ class Simulation:
         ev = self.scheduler.current
         rec = TraceRecord(len(self.trace), time, kind, node, ev.id if ev else None, data, explain)
         self.trace.append(rec)
-        for fn in self._listeners:
-            fn(rec)
         return rec
-
-    def add_listener(self, fn: Callable[[TraceRecord], None]) -> None:
-        self._listeners.append(fn)
 
     # ------------------------------------------------------------ control
     @property
@@ -632,7 +626,7 @@ class Simulation:
                 if m.qubit is not None and self.backend.exists(m.qubit):
                     self.backend.discard(m.qubit)
             return
-        except (ExprError, ProtocolError, QuantumError) as exc:
+        except (ProtocolError, QuantumError, TypeError, ValueError) as exc:  # ValueError covers ExprError
             begin_rec.data["actions"] = actions_log
             self._halt(node, "protocol.error", f"transition '{tr.id}': {exc}")
             return
@@ -931,7 +925,7 @@ class Simulation:
                 how = f"armed at {tu.fmt(t)} for absolute local time `{a['at_ns']}` = {val} ns"
             fire = node.clock.to_global(target_local)
             if fire < t:
-                how += f"; target already passed, fires immediately"
+                how += "; target already passed, fires immediately"
                 fire = t
             if not node.clock.ideal:
                 how += f"; local→global conversion ({node.clock.describe()}) gives {tu.fmt(fire)}"

@@ -10,7 +10,7 @@ go through :class:`fractions.Fraction` built from the *decimal string* of the
 value, so ``0.1`` ns is exactly 100000 fs rather than the nearest binary
 double.  User-supplied times are rounded half-to-even to the nearest
 femtosecond, once, at the conversion boundary; propagation delays are rounded
-up (see :func:`propagation_fs`).  See docs/SEMANTICS.md.
+up (see :func:`propagation_fs`).
 """
 
 from __future__ import annotations
@@ -49,11 +49,6 @@ def exact(value: Number) -> Fraction:
     raise TypeError(f"cannot interpret {value!r} as a number")
 
 
-def round_half_even(q: Fraction) -> int:
-    """Round a rational to the nearest integer, ties to even (Python ``round``)."""
-    return round(q)
-
-
 def to_fs(value: Number, unit: str = "ns") -> int:
     """Convert a quantity in ``unit`` to integer femtoseconds."""
     if type(value) is int and unit in UNITS:  # fast path, exact
@@ -62,21 +57,12 @@ def to_fs(value: Number, unit: str = "ns") -> int:
         scale = UNITS[unit]
     except KeyError as exc:
         raise ValueError(f"unknown time unit {unit!r}") from exc
-    return round_half_even(exact(value) * scale)
+    return round(exact(value) * scale)  # ties to even
 
 
 def ns(value: Number) -> int:
     """Shorthand: nanoseconds -> fs."""
     return to_fs(value, "ns")
-
-
-def fs_to_ns(t: int) -> float:
-    """Femtoseconds -> float nanoseconds (for display / expressions only)."""
-    return t / NS
-
-
-def fs_to_unit(t: int, unit: str = "ns") -> float:
-    return t / UNITS[unit]
 
 
 def propagation_fs(distance_m: Number, speed_mps: Number) -> int:
