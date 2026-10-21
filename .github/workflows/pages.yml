@@ -1,10 +1,14 @@
 # Build the static workbench (engine runs in the browser via Pyodide) and
-# publish it to GitHub Pages on every push to main.
+# publish it to GitHub Pages.
+#
+# GitHub only lets the `github-pages` environment deploy from the repository's
+# default branch, so the jobs run only there; pushes to any other branch show
+# this workflow as skipped rather than failed. Whichever branch is set as the
+# default (Settings -> General) is the one that publishes.
 name: Deploy workbench to GitHub Pages
 
 on:
   push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,6 +22,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
