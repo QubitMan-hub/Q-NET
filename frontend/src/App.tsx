@@ -8,6 +8,8 @@ import { AutomatonCanvas } from "./components/AutomatonCanvas";
 import { Geometry } from "./components/SpaceView";
 import { Inspector } from "./components/Inspector";
 import { ConsolePanel, DecisionPanel, EventLog, Experiments, Timeline, ValidationPanel } from "./components/Dock";
+import { ComparePanel, TimingPanel } from "./components/QpvPanels";
+import { ScenarioDialog, StartScreen } from "./components/ScenarioDialog";
 import { Brand, Icon } from "./components/ui";
 import { deleteSelection, duplicateParticipant, addState } from "./editing";
 import { IN_BROWSER, onEngineStatus } from "./api";
@@ -30,20 +32,17 @@ function useDrag(initial: number, axis: "x" | "y", invert = false, min = 120, ma
   return [size, onDown] as const;
 }
 
-function blankProject(): Project {
-  return {
-    format: "qpvsim-project", version: 1,
-    meta: { name: "Untitled protocol", description: "", protocol: { name: "custom", version: "0.1", references: [] },
-      assumptions: [], limitations: ["Simulation results are evidence about the modelled behaviour only; they are not security proofs."] },
-    physics: { signal_speed_mps: 299792458, allow_superluminal: false },
-    simulation: { seed: 1, backend: "density_matrix", max_time_ns: 1000, max_events: 100000, stop_when: "verifiers_decided", priorities: {} },
-    claim: { prover: null, position: [0, 0] },
-    participants: [], links: [], resources: [], automata: {},
-    verification: { rule: "all", verifiers: null }, experiments: [],
-  };
-}
+type Panels = { left: boolean; right: boolean; toggle: (side: "left" | "right") => void; showWelcome: () => void; buildScenario: () => void };
 
-type Panels = { left: boolean; right: boolean; toggle: (side: "left" | "right") => void; showWelcome: () => void };
+/** Who currently answers at the claim, in the engine's scenario vocabulary. */
+function answering(p: Project): string {
+  const autos = p.participants.filter((q) => q.role !== "verifier").map((q) => q.automaton).join(" ");
+  if (autos.includes("qpv_adv_chain")) return "teleport";
+  if (autos.includes("qpv_adv_unentangled")) return "unentangled";
+  if (autos.includes("qpv_adv_guess")) return "guess";
+  const prover = p.participants.find((q) => q.id === p.claim.prover);
+  return prover ? (prover.role === "prover" ? "honest" : "displaced") : "";
+}
 
 function Toolbar({ panels }: { panels: Panels }) {
   const s = useStore();
@@ -68,14 +67,15 @@ function Toolbar({ panels }: { panels: Panels }) {
         <button className={`btn ghost${panels.right ? " active" : ""}`} title="Show or hide the inspector" aria-pressed={panels.right}
           onClick={() => panels.toggle("right")}><Icon.panelRight /></button>
       </div>
-      <input className="project-name" value={s.project?.meta.name ?? ""} aria-label="Project name"
+      <input className="project-name" value={s.project?.meta.name ?? ""} aria-label="Project name" data-rev={s.revision}
         onChange={(e) => s.edit((p) => { p.meta.name = e.target.value; })} />
       <div className="tool-group">
         <select className="btn" style={{ width: 150 }} value="" aria-label="Open example" onChange={(e) => e.target.value && s.loadExample(e.target.value)}>
           <option value="">Examples…</option>
           {Object.entries(s.meta?.examples ?? {}).map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
         </select>
-        <button className="btn ghost" title="Start an empty project" onClick={() => s.openDocument(blankProject())} data-testid="btn-new"><Icon.plus /><span className="lbl">New</span></button>
+        <button className="btn ghost" title="New scenario: dimension, verifiers, claim, prover or attack (or a blank project)" onClick={panels.buildScenario}
+          data-testid="btn-new"><Icon.plus /><span className="lbl">New</span></button>
         <button className="btn ghost" title="Open project file" onClick={() => fileRef.current?.click()}><Icon.open /><span className="lbl">Open</span></button>
         <button className="btn ghost" title="Save project file (Ctrl+S)" onClick={download} data-testid="btn-save"><Icon.save /><span className="lbl">Save</span></button>
         <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={async (e) => {
@@ -94,7 +94,7 @@ function Toolbar({ panels }: { panels: Panels }) {
         <button className="btn ghost" title="Execute one event (N)" disabled={!sim || sim.stopped} onClick={() => s.step(1)} data-testid="btn-step"><Icon.step /><span className="lbl">Step</span></button>
         <button className={`btn ${s.playing ? "active" : "ghost"}`} title="Play: advance engine time continuously (Space)" disabled={!sim || sim.stopped}
           onClick={() => s.setPlaying(!s.playing)} data-testid="btn-play">{s.playing ? <Icon.pause /> : <Icon.play />}<span className="lbl">{s.playing ? "Pause" : "Play"}</span></button>
-        <select className="btn" value={s.playRate} title="Playback rate (simulated ns per second)" aria-label="Playback rate"
+        <select className="btn rate" value={s.playRate} title="Playback rate (simulated ns per second)" aria-label="Playback rate"
           onChange={(e) => s.setPlayRate(Number(e.target.value))}>
           {[0.5, 1, 2, 4, 10, 25].map((r) => <option key={r} value={r}>{r} ns/s</option>)}
         </select>
@@ -104,7 +104,7 @@ function Toolbar({ panels }: { panels: Panels }) {
         <span className="t" data-testid="clock">{sim ? nsLabel(sim.now_fs, 6) : "—"}</span>
         <span className="xs mono muted">{sim ? `${sim.events_executed} events · ${sim.pending.length} pending` : s.simError ? "invalid project" : "—"}</span>
       </div>
-      <span className={`status-pill ${s.simError ? "error" : outcome ?? "pending"}`} data-testid="outcome">
+      <span className={`status-pill ${s.simError ? "error" : outcome ?? "pending"}`} data-testid="outcome" data-rev={sim?.revision ?? ""}>
         {s.simError ? "cannot run" : outcome === "accept" ? "accepted" : outcome === "reject" ? "rejected" : sim?.stopped ? "stopped" : "running"}
       </span>
       <button className="btn ghost" title="Getting started" aria-label="Getting started" onClick={panels.showWelcome}><Icon.help /></button>
@@ -172,8 +172,8 @@ function Palette() {
 }
 
 const DOCK_TABS: [DockTab, string][] = [
-  ["events", "Events"], ["timeline", "Timeline"], ["console", "Console"],
-  ["experiments", "Experiments"], ["validation", "Validation"], ["decision", "Decision"],
+  ["events", "Events"], ["timeline", "Timeline"], ["timing", "Timing"], ["console", "Console"],
+  ["experiments", "Experiments"], ["compare", "Compare"], ["validation", "Validation"], ["decision", "Decision"],
 ];
 
 function Boot({ error }: { error: string | null }) {
@@ -195,35 +195,6 @@ function Boot({ error }: { error: string | null }) {
 
 const WELCOME_KEY = "qpv.welcome.dismissed";
 
-function Welcome({ onClose }: { onClose: () => void }) {
-  const s = useStore();
-  const step = async (fn: () => Promise<void> | void) => { await fn(); };
-  return (
-    <div className="welcome" role="dialog" aria-labelledby="welcome-title">
-      <h2 id="welcome-title">Simulate quantum position verification</h2>
-      <p>Two verifiers send challenges timed to meet at a claimed position; only someone really there can
-        answer both in time. Every step below runs in a real event-driven engine{IN_BROWSER ? ", here in your browser" : ""}.</p>
-      <ol>
-        <li>
-          <span>Run one round with an honest prover.</span>
-          <button className="btn" onClick={() => step(async () => { await s.loadExample("qpv_bb84_honest"); await s.runToEnd(); s.setDock("decision"); })}>Run honest round</button>
-        </li>
-        <li>
-          <span>See the challenges and answers on the light cone.</span>
-          <button className="btn" onClick={() => s.setView("spacetime")}>Open spacetime view</button>
-        </li>
-        <li>
-          <span>Watch two colluding attackers who share one entangled pair fool the verifiers.</span>
-          <button className="btn" onClick={() => step(async () => { await s.loadExample("qpv_bb84_teleportation_attack"); await s.runToEnd(); s.setView("spacetime"); s.setDock("decision"); })}>Run the attack</button>
-        </li>
-      </ol>
-      <p className="welcome-note">Then try the Console tab, change a setting in the Inspector, or repeat a run thousands of times under Experiments.
-        Results describe the model, not a security proof.</p>
-      <div className="row"><span className="grow" /><button className="btn primary" onClick={onClose}>Start exploring</button></div>
-    </div>
-  );
-}
-
 export default function App() {
   const s = useStore();
   const [leftW, dragLeft] = useDrag(196, "x", false, 150, 400);
@@ -233,10 +204,12 @@ export default function App() {
   const [left, setLeft] = useState(!narrow);
   const [right, setRight] = useState(window.innerWidth >= 900);
   const [welcome, setWelcome] = useState(() => storageGet(WELCOME_KEY) !== "1");
+  const [builder, setBuilder] = useState(false);
   const panels: Panels = {
     left, right,
     toggle: (side) => (side === "left" ? setLeft((v) => !v) : setRight((v) => !v)),
     showWelcome: () => setWelcome(true),
+    buildScenario: () => setBuilder(true),
   };
   const closeWelcome = () => { setWelcome(false); storageSet(WELCOME_KEY, "1"); };
   // Give the canvas room when the window becomes narrow (panels can be reopened).
@@ -311,7 +284,15 @@ export default function App() {
                 Automaton{s.focus ? <span className="count">{s.focus} · {focusAut}</span> : null}</button>
               <button className={`tab${s.view === "spacetime" ? " on" : ""}`} onClick={() => s.setView("spacetime")} role="tab">Geometry</button>
               <span className="spacer" />
-              <span className="xs muted" style={{ alignSelf: "center", paddingRight: 10 }}>
+              <label className="who-answers" title={s.analysis?.qpv ? `${GLOSSARY.attack} Switching reruns at once.` : "Switching who answers needs a QPV setup (build one with New)."}>
+                Who answers
+                <select className="select attack-switch" value={answering(s.project)} aria-label="Who answers at the claim" data-testid="attack-switch"
+                  disabled={!s.analysis?.qpv} onChange={(e) => s.switchAttack(e.target.value)}>
+                  {!answering(s.project) && <option value="">—</option>}
+                  {Object.entries(s.scenarios?.answerers ?? {}).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </label>
+              <span className="xs muted tab-info" style={{ alignSelf: "center", paddingRight: 10 }}>
                 {s.project.meta.protocol.name} · backend {s.project.simulation.backend} · seed {s.sim?.seed ?? s.project.simulation.seed}
               </span>
             </div>
@@ -330,12 +311,15 @@ export default function App() {
                   {k === "events" && s.sim && <span className="count">{s.sim.trace_length}</span>}
                   {k === "validation" && (errors + warnings > 0) && <span className="count" style={{ color: errors ? "var(--reject)" : "var(--warn)" }}>{errors ? `${errors} errors` : `${warnings} warnings`}</span>}
                   {k === "decision" && s.sim && <span className="count">{s.sim.decision.outcome}</span>}
+                  {k === "timing" && !!s.analysis?.timing.issues.length && <span className="count" style={{ color: "var(--warn)" }}>{s.analysis.timing.issues.length}</span>}
                 </button>
               ))}
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
               {s.dock === "events" && <EventLog />}
               {s.dock === "timeline" && <Timeline />}
+              {s.dock === "timing" && <TimingPanel />}
+              {s.dock === "compare" && <ComparePanel />}
               {s.dock === "console" && <ConsolePanel />}
               {s.dock === "experiments" && <Experiments />}
               {s.dock === "validation" && <ValidationPanel />}
@@ -351,7 +335,8 @@ export default function App() {
           <div className="panel-body"><Inspector /></div>
         </div>
       </div>
-      {welcome && <Welcome onClose={closeWelcome} />}
+      {welcome && <StartScreen onClose={closeWelcome} onBuild={() => setBuilder(true)} />}
+      {builder && <ScenarioDialog onClose={() => setBuilder(false)} />}
       {s.toast && <div className={`toast${s.toast.error ? " error" : ""}`} role="status">{s.toast.text}</div>}
     </div>
   );

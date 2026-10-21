@@ -148,7 +148,25 @@ await page.waitForTimeout(300);
 await page.screenshot({ path: `${SHOTS}/07-attack-spacetime-timeline.png` });
 await page.click('[data-testid="dock-decision"]');
 await page.waitForTimeout(300);
+check((await page.textContent('[data-testid="sentence-V0"]')).startsWith("Accepted: the correct answer"), "the decision explains each verdict in a sentence");
+await page.click('.vcard .ref-chip:has-text("message")');
+await page.waitForTimeout(300);
+check(/Message m\d+/.test(await page.textContent('[data-testid="inspector"]')), "clicking the explanation jumps to the message in the inspector");
 await page.screenshot({ path: `${SHOTS}/08-decision.png` });
+
+// Timing panel and attack switcher on the honest example
+await post("/api/project/example/qpv_bb84_honest");
+await page.reload();
+await page.waitForSelector('[data-testid="node-V0"]');
+await page.click('[data-testid="dock-timing"]');
+await page.waitForSelector('[data-testid="timing-panel"] tbody tr');
+const timing = await page.textContent('[data-testid="timing-panel"]');
+check((await page.locator('[data-testid="timing-panel"] tbody tr').count()) === 2 && timing.includes("+0.300 ns") && timing.includes("20.000"),
+  "timing panel lists each verifier with arrival at the claim (20 ns) and slack (+0.3 ns)");
+await page.selectOption('[data-testid="attack-switch"]', "teleport");
+await page.waitForFunction(() => document.querySelector('[data-testid="outcome"]')?.textContent?.trim() === "accepted", null, { timeout: 30000 });
+st = await api("/api/sim/state");
+check(Object.keys(st.nodes).join(",") === "V0,V1,E0,E1" && st.decision.outcome === "accept", "the attack switcher swaps in the teleportation attack and reruns");
 
 // Geometry: the dimension picks the view; the light-cone checker answers clicks on the map
 await post("/api/qpv/scenario", { id: "2d_teleport" });

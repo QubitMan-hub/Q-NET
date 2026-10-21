@@ -29,6 +29,7 @@ const settle = () => page.waitForTimeout(450);
 await page.goto(BASE);
 await page.waitForSelector('[data-testid="btn-new"]');
 await page.click('[data-testid="btn-new"]');
+await page.click('[data-testid="btn-blank"]');
 await settle();
 check((await api("/api/project")).project.participants.length === 0, "New creates an empty project in the engine");
 

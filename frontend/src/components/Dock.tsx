@@ -4,6 +4,7 @@ import { api } from "../api";
 import { KIND_COLOR, niceStep, nsLabel, ns } from "../format";
 import { Experiments } from "./Experiments";
 import { Icon, useSize } from "./ui";
+import { RefChips } from "./QpvPanels";
 
 // ======================================================================= events
 export function EventLog() {
@@ -235,7 +236,9 @@ export function DecisionPanel() {
             <span className={`status-pill ${v.verdict ?? (v.status === "error" ? "error" : "pending")}`}>{v.verdict ?? v.status}</span>
             <span className="muted small" style={{ fontWeight: 400 }}>{v.category}{v.decided_at_fs !== null ? ` at ${nsLabel(v.decided_at_fs)}` : ""}</span>
           </h4>
-          <div className="small">{v.reason ?? "No verdict yet."}</div>
+          <div className="verdict-sentence" data-testid={`sentence-${v.id}`}>{v.sentence}</div>
+          <RefChips refs={v.refs} />
+          {v.reason && <div className="small muted">Verifier's own reason: {v.reason}</div>}
           {v.trigger && <div className="small muted">Fired by <span className="mono">{v.transition}</span> on {v.trigger}.</div>}
           {v.facts?.length > 0 && <ul>{v.facts.map((f: string, i: number) => <li key={i}>{f}</li>)}</ul>}
           {Object.keys(v.observations ?? {}).length > 0 && <div className="xs mono muted" style={{ marginTop: 4 }}>{Object.entries(v.observations).map(([k, x]) => `${k}=${typeof x === "number" ? (x as number).toFixed(6) : x}`).join("   ")}</div>}

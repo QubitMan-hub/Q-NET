@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore, type ConsoleEntry } from "../store";
 import { api } from "../api";
 import { Icon } from "./ui";
+import { RefChips } from "./QpvPanels";
 
 // The engine's command catalog drives everything here: groups, one-click starters and result views.
 type CommandInfo = { name: string; usage: string; help: string; aliases: string[]; category: string; starter?: string | null };
@@ -66,6 +67,7 @@ function Entry({ e, onRerun, onPick }: { e: ConsoleEntry; onRerun: (cmd: string)
       </div>
       {isHelp && <div className="cx-result"><HelpResult data={e.data} onPick={onPick} /></div>}
       {isDecision && <div className="cx-result"><DecisionResult d={e.data} /></div>}
+      {e.status === "ok" && !!e.refs?.length && <div className="cx-refs"><RefChips refs={e.refs} /></div>}
       {e.status !== "running" && !isHelp && !isDecision && (
         <div className="cx-result">
           <pre>{shown}</pre>

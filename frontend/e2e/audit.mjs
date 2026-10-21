@@ -31,20 +31,49 @@ await page.waitForSelector('[data-testid="node-V0"]', { timeout: 240000 });
 console.log(`booted in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 await page.screenshot({ path: `${SHOTS}/00-boot.png` });
 
-// first-visit welcome card: every suggested step must work
-area = "welcome";
-if (!(await page.$(".welcome"))) note(area, "welcome card not shown on first visit");
-else {
-  await page.click('.welcome button:text("Run honest round")');
-  await page.waitForFunction(() => document.querySelector('[data-testid="outcome"]')?.textContent?.trim() === "accepted", null, { timeout: 30000 }).catch(() => note(area, "honest round not accepted"));
-  await page.click('.welcome button:text("Open spacetime view")');
-  await page.waitForSelector('[data-testid^="st-msg-"]', { timeout: 10000 }).catch(() => note(area, "spacetime view did not open"));
-  await page.click('.welcome button:text("Run the attack")');
-  await page.waitForSelector('[data-testid="st-msg-6"]', { timeout: 30000 }).catch(() => note(area, "attack run not shown"));
-  await page.screenshot({ path: `${SHOTS}/01-welcome.png` });
-  await page.click('.welcome button:text("Start exploring")');
-  if (await page.$(".welcome")) note(area, "welcome card did not close");
+// first-visit start screen: every ready-made scenario runs and opens the right geometry view
+area = "start";
+// a decision of the current project's run (the pill and the project carry the engine revision they belong to)
+const decided = () => page.waitForFunction(() => {
+  const pill = document.querySelector('[data-testid="outcome"]');
+  return pill?.getAttribute("data-rev") === document.querySelector(".project-name")?.getAttribute("data-rev")
+    && ["accepted", "rejected"].includes(pill?.textContent?.trim() ?? "");
+}, null, { timeout: 60000 });
+if (!(await page.$('[data-testid="start-screen"]'))) note(area, "start screen not shown on first visit");
+await page.screenshot({ path: `${SHOTS}/01-start.png` });
+for (const d of [1, 2, 3]) for (const who of ["honest", "unentangled", "teleport"]) {
+  area = `start ${d}d_${who}`;
+  if (!(await page.$('[data-testid="start-screen"]'))) await page.click('button[aria-label="Getting started"]');
+  const rev = await page.getAttribute(".project-name", "data-rev");
+  await page.click(`[data-testid="start-${d}d_${who}"]`);
+  await page.waitForFunction((r) => document.querySelector(".project-name")?.getAttribute("data-rev") !== r, rev, { timeout: 60000 }).catch(() => {});
+  await decided().catch(() => note(area, "run did not finish with a decision"));
+  const want = d === 1 ? '[data-testid^="st-msg-"]' : d === 2 ? '[data-testid="space-map"]' : '[data-testid="space-3d"]';
+  await page.waitForSelector(want, { timeout: 10000 }).catch(() => note(area, `geometry view ${want} not shown`));
+  const out = (await page.textContent('[data-testid="outcome"]')).trim();
+  if (who !== "unentangled" && out !== "accepted") note(area, `expected accepted, got ${out}`);
+  await page.click('[data-testid="dock-timing"]');
+  await page.waitForSelector('[data-testid="timing-panel"] tbody tr', { timeout: 10000 }).catch(() => note(area, "timing panel empty"));
 }
+area = "scenario builder";
+await page.click('[data-testid="btn-new"]');
+await page.click('[data-testid="scenario-dialog"] button[role="radio"]:text-is("3D")');
+await page.click('[data-testid="scenario-run"]');
+await decided().catch(() => note(area, "built 3D scenario did not finish"));
+await page.waitForSelector('[data-testid="space-3d"]', { timeout: 10000 }).catch(() => {});
+if ((await page.locator('[data-testid^="space-node-"]').count()) !== 5) note(area, "3D builder did not create 4 verifiers and a prover");
+area = "attack switcher";
+for (const who of ["unentangled", "teleport", "guess", "displaced", "honest"]) {
+  await page.selectOption('[data-testid="attack-switch"]', who);
+  await decided().catch(() => note(area, `${who} did not rerun`));
+  await page.waitForTimeout(300);
+}
+if ((await page.textContent('[data-testid="outcome"]')).trim() !== "accepted") note(area, "switching back to the honest prover did not accept");
+area = "compare";
+await page.click('[data-testid="dock-compare"]');
+await page.click('[data-testid="compare-panel"] button:text("Compare (200 runs each)")');
+await page.waitForSelector('[data-testid="compare-panel"] table.grid tbody tr', { timeout: 180000 }).catch(() => note(area, "compare results not shown"));
+await page.screenshot({ path: `${SHOTS}/02-compare.png` });
 
 const examples = await page.$$eval('select[aria-label="Open example"] option', (os) => os.map((o) => o.value).filter(Boolean));
 const outcome = () => page.textContent('[data-testid="outcome"]').then((t) => t.trim());
@@ -68,7 +97,7 @@ for (const ex of examples) {
     await page.keyboard.press(key);
     await page.waitForTimeout(350);
   }
-  for (const tab of ["events", "timeline", "console", "experiments", "validation", "decision"]) {
+  for (const tab of ["events", "timeline", "timing", "console", "experiments", "compare", "validation", "decision"]) {
     area = `example ${ex} / tab ${tab}`;
     await page.click(`[data-testid="dock-${tab}"]`);
     await page.waitForTimeout(250);
@@ -105,7 +134,8 @@ await page.screenshot({ path: `${SHOTS}/inspector.png` });
 // console
 area = "console";
 await page.click('[data-testid="dock-console"]');
-for (const c of ["help", "participants", "node E0", "fsm E1", "queue", "chain 6", "decision", "invariants", "time", "links", "messages", "events last=5", "timing", "geometry", "strategies", "strategy E0", "profiles", "help set", "reset", "run until=15", "step 2", "run", "why", "nonsense", "node", "batch 30 sweep=participants.E0.processing_ns:0,0.6"]) {
+for (const c of ["help", "participants", "node E0", "fsm E1", "queue", "chain 6", "decision", "invariants", "time", "links", "messages", "events last=5", "timing", "geometry", "strategies", "strategy E0", "profiles", "help set", "timing", "lightcone 0 0", "scenario 2d_unentangled", "attack teleport", "autowire", "compare runs=20",
+  "sweep noise 0 0.4 steps=2 runs=20", "load example qpv_bb84_collusion_unentangled", "reset", "run until=15", "step 2", "run", "why", "nonsense", "node", "batch 30 sweep=participants.E0.processing_ns:0,0.6"]) {
   await page.fill('[data-testid="console-input"]', c);
   await page.press('[data-testid="console-input"]', "Enter");
   await page.waitForFunction(() => !document.querySelector(".cx-entry.running"), null, { timeout: 60000 }).catch(() => note(area, `'${c}' did not finish`));
@@ -136,6 +166,7 @@ await page.screenshot({ path: `${SHOTS}/experiments.png` });
 // editing: new project, drop participants, undo/redo, save
 area = "editing";
 await page.click('[data-testid="btn-new"]');
+await page.click('[data-testid="btn-blank"]');
 await page.waitForTimeout(800);
 if (!(await page.$(".canvas-wrap .react-flow"))) note(area, "New did not switch to the network canvas");
 const dt = await page.evaluateHandle(() => new DataTransfer());

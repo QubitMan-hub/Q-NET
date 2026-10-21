@@ -76,21 +76,10 @@ function Histogram({ values, label }: { values: number[]; label: string }) {
   );
 }
 
-export function Experiments() {
-  const project = useStore((s) => s.project)!;
-  const edit = useStore((s) => s.edit);
+/** An experiment job in the engine, polled until it finishes. */
+export function useExperimentJob() {
   const setToast = useStore((s) => s.setToast);
-  const exps = project.experiments;
-  const [selId, setSelId] = useState<string | null>(exps[0]?.id ?? null);
-  const [draft, setDraft] = useState<ExperimentSpec>(() => clone(exps[0] ?? { id: "exp1", name: "New experiment", runs: 200, seed: 1, sweep: [] }));
   const [job, setJob] = useState<any>(null);
-  const [pointIdx, setPointIdx] = useState(0);
-
-  useEffect(() => {
-    const e = exps.find((x) => x.id === selId);
-    if (e) setDraft(clone(e));
-  }, [selId, project.meta.name]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     if (!job || job.status !== "running") return;
     const h = window.setInterval(async () => {
@@ -103,18 +92,56 @@ export function Experiments() {
     }, 300);
     return () => window.clearInterval(h);
   }, [job?.id, job?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const start = async (exp: unknown) => {
+    const { id } = await api.startExperiment(exp);
+    setJob({ id, status: "running", done: 0, total: null });
+  };
+  return { job, start, cancel: () => job && api.cancelExperiment(job.id) };
+}
+
+export function JobProgress({ job }: { job: any }) {
+  const res = job.result;
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div className="progress"><div style={{ width: `${job.total ? (100 * job.done) / job.total : job.status === "done" ? 100 : 3}%` }} /></div>
+      <div className="xs muted" style={{ marginTop: 3 }}>{job.status === "running" ? `${job.done}${job.total ? ` / ${job.total}` : ""} runs` : job.status === "done" ? `done in ${res?.wall_time_s.toFixed(2)} s (${Math.round(res?.runs_per_second ?? 0)} runs/s)` : job.error}</div>
+    </div>
+  );
+}
+
+export function Experiments() {
+  const project = useStore((s) => s.project)!;
+  const edit = useStore((s) => s.edit);
+  const setToast = useStore((s) => s.setToast);
+  const presets = useStore((s) => s.scenarios?.presets ?? {});
+  const exps = project.experiments;
+  const [selId, setSelId] = useState<string | null>(exps[0]?.id ?? null);
+  const [draft, setDraft] = useState<ExperimentSpec>(() => clone(exps[0] ?? { id: "exp1", name: "New experiment", runs: 200, seed: 1, sweep: [] }));
+  const { job, start, cancel } = useExperimentJob();
+  const [pointIdx, setPointIdx] = useState(0);
+  const [preset, setPreset] = useState({ name: "noise", from: 0, to: 0.5, steps: 6 });
+
+  useEffect(() => {
+    const e = exps.find((x) => x.id === selId);
+    if (e) setDraft(clone(e));
+  }, [selId, project.meta.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async () => {
     setPointIdx(0);
-    const { id } = await api.startExperiment(draft);
-    setJob({ id, status: "running", done: 0, total: null });
+    await start(draft);
+  };
+  // A QPV preset sweep: one quantity varied across the whole setup (engine axis "preset:<name>").
+  const applyPreset = (name: string, from: number, to: number, steps: number) => {
+    setPreset({ name, from, to, steps });
+    const values = presets[name]?.values ?? Array.from({ length: steps }, (_, i) => +(from + ((to - from) * i) / Math.max(1, steps - 1)).toFixed(9));
+    setDraft({ ...draft, id: `sweep_${name}`, name: presets[name]?.label ?? name, sweep: [{ path: `preset:${name}`, values }] });
   };
   const saveToProject = () => edit((p) => {
     const i = p.experiments.findIndex((e) => e.id === draft.id);
     if (i >= 0) p.experiments[i] = clone(draft); else p.experiments.push(clone(draft));
   });
   const res = job?.result;
-  const axis = (draft.sweep ?? []).map((s) => s.path).join(" × ");
+  const axis = (draft.sweep ?? []).map((s) => presets[s.path.replace(/^preset:/, "")]?.label ?? s.path).join(" × ");
   const pt = res?.points[pointIdx];
   const rttVerifier = pt ? Object.keys(pt.summary.verifiers)[0] : null;
 
@@ -135,6 +162,22 @@ export function Experiments() {
         <Field label="Runs per point"><NumberInput value={draft.runs} min={1} step={100} onCommit={(v) => setDraft({ ...draft, runs: Math.round(v ?? 100) })} /></Field>
         <Field label="Master seed"><NumberInput value={draft.seed} min={0} step={1} onCommit={(v) => setDraft({ ...draft, seed: Math.round(v ?? 0) })} /></Field>
         {useStore.getState().meta?.parallel_experiments !== false && <Field label="Workers" title="Parallel processes (results identical to 1 worker)"><NumberInput value={draft.workers ?? 1} min={1} max={32} step={1} onCommit={(v) => setDraft({ ...draft, workers: Math.round(v ?? 1) })} /></Field>}
+        <Field label="QPV sweep" title="Vary one QPV quantity across the whole setup">
+          <select className="select" value={preset.name} aria-label="Sweep preset" onChange={(e) => {
+            const r = presets[e.target.value]?.range ?? [0, 1, 6];
+            applyPreset(e.target.value, r[0], r[1], r[2]);
+          }}>
+            {Object.entries(presets).map(([k, p]) => <option key={k} value={k}>{p.label}</option>)}
+          </select>
+        </Field>
+        {!presets[preset.name]?.values && (
+          <div className="row" style={{ marginBottom: 6 }}>
+            {(["from", "to", "steps"] as const).map((f) => (
+              <NumberInput key={f} value={preset[f]} ariaLabel={`Sweep ${f}`} step={f === "steps" ? 1 : 0.1} min={f === "steps" ? 2 : undefined}
+                onCommit={(v) => { const n = { ...preset, [f]: v ?? preset[f] }; applyPreset(n.name, n.from, n.to, Math.round(n.steps)); }} />
+            ))}
+          </div>
+        )}
         <Field label="Sweep" stack title="One axis per line: path: v1, v2, … (axes form a grid)">
           <textarea className="textarea code" rows={3} defaultValue={sweepText} key={sweepText} spellCheck={false}
             placeholder="participants.E0.processing_ns: 0, 0.2, 0.4"
@@ -149,15 +192,10 @@ export function Experiments() {
         <div className="note" style={{ marginBottom: 8 }}>Paths address the project document; list items by id, e.g. <span className="mono">links.q0.noise.depolarizing</span>, <span className="mono">participants.E0.params.policy</span>.</div>
         <div className="row">
           <button className="btn primary" onClick={() => run().catch((e) => setToast(String(e.message), true))} disabled={job?.status === "running"}>Run experiment</button>
-          {job?.status === "running" && <button className="btn" onClick={() => api.cancelExperiment(job.id)}>Cancel</button>}
+          {job?.status === "running" && <button className="btn" onClick={cancel}>Cancel</button>}
           <button className="btn" onClick={saveToProject}>Save to project</button>
         </div>
-        {job && (
-          <div style={{ marginTop: 10 }}>
-            <div className="progress"><div style={{ width: `${job.total ? (100 * job.done) / job.total : job.status === "done" ? 100 : 3}%` }} /></div>
-            <div className="xs muted" style={{ marginTop: 3 }}>{job.status === "running" ? `${job.done}${job.total ? ` / ${job.total}` : ""} runs` : job.status === "done" ? `done in ${res?.wall_time_s.toFixed(2)} s (${Math.round(res?.runs_per_second ?? 0)} runs/s)` : job.error}</div>
-          </div>
-        )}
+        {job && <JobProgress job={job} />}
       </div>
       <div className="exp-main">
         {!res && <div className="empty">Experiments repeat the current project many times with independent seeds and optional parameter sweeps. Each run’s seed is recorded, so any run can be reproduced exactly. Results are raw per-run records plus statistics derived from them.</div>}
