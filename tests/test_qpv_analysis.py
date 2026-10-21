@@ -4,7 +4,7 @@ import pytest
 
 from qpvsim import example, normalize, set_path
 from qpvsim import timeunits as tu
-from qpvsim.qpv import lightcone, scenario, timing
+from qpvsim.qpv import lightcone, presets, scenario, timing
 
 C = tu.SPEED_OF_LIGHT_MPS
 D3 = tu.propagation_fs(3, C)
@@ -90,3 +90,80 @@ def test_lightcone_3d_slice():
     doc = scenario.build(dim=3)
     g = lightcone.grid(doc, n=11)
     assert g["z"] == 0.0 and g["slack_ns"][5][5] == pytest.approx(0.5, abs=1e-5)
+
+
+# ---------------------------------------------------------------- verdict explanations
+def _verdicts(doc):
+    from qpvsim import Simulation
+    sim = Simulation(doc).run()
+    return sim, {v["id"]: v for v in sim.snapshot()["decision"]["verifiers"]}
+
+
+def test_explanation_accept():
+    _, v = _verdicts(honest())
+    assert v["V0"]["sentence"].startswith("Accepted: the correct answer")
+    assert "0.300 ns before the deadline" in v["V0"]["sentence"]
+    assert {r["kind"] for r in v["V0"]["refs"]} == {"message", "event", "transition"}
+
+
+def test_explanation_late_answer():
+    doc = honest()
+    set_path(doc, "participants.P.processing_ns", 0.9)
+    sim, v = _verdicts(doc)
+    assert v["V1"]["sentence"] == "Rejected: the answer reaches V1 0.400 ns after its deadline (30.506923 ns)."
+    late = next(m for m in sim.messages.values() if m.dst == "V1" and m.tag == "answer")
+    assert {"kind": "message", "id": late.id} in v["V1"]["refs"]
+
+
+def test_explanation_no_answer():
+    doc = honest()
+    set_path(doc, "links.q0.loss_prob", 1.0)
+    _, v = _verdicts(doc)
+    assert v["V0"]["sentence"] == "Rejected: no answer was sent to V0 before its deadline (30.506923 ns)."
+
+
+def test_explanation_wrong_answer():
+    doc = honest()
+    for a in doc["automata"]["qpv_prover_2v"]["transitions"][0]["actions"][1:]:
+        a["value"] = "1 - answer"
+    _, v = _verdicts(doc)
+    s = v["V0"]["sentence"]
+    assert s.startswith("Rejected: V0 received the answer") and "failed the check `msg.value == x" in s
+    assert {"kind": "transition", "automaton": "qpv_verifier_quantum", "id": "accept"} in v["V0"]["refs"]
+
+
+# ---------------------------------------------------------------- presets, references
+
+def test_presets_apply():
+    doc = honest()
+    assert presets.apply(doc, "distance", 0.5)["participants"][2]["position"] == [-0.5, 0.0]
+    assert presets.apply(doc, "noise", 0.2)["links"][0]["noise"] == {"depolarizing": 0.2}
+    assert {p["clock"]["drift_ppm"] for p in presets.apply(doc, "drift", 30)["participants"][:2]} == {30}
+    assert presets.apply(doc, "processing", 0.7)["participants"][2]["processing_ns"] == 0.7
+    tele = normalize(example("qpv_bb84_teleportation_attack"))
+    assert presets.apply(tele, "entanglement", 0.3)["resources"][1]["werner_p"] == 0.3
+    assert [p["id"] for p in presets.apply(doc, "attack", "guess")["participants"]] == ["V0", "V1", "E0", "E1"]
+    with pytest.raises(ValueError, match="prover"):
+        presets.apply(tele, "distance", 1.0)
+    with pytest.raises(ValueError, match="preset"):
+        presets.apply(doc, "humidity", 1)
+
+
+def test_preset_sweep_runs():
+    from qpvsim.experiments import run_experiment
+    res = run_experiment(honest(), {"runs": 80, "seed": 2, "sweep": [{"preset": "noise", "values": [0.0, 0.8]}]})
+    clean, noisy = (p["summary"]["acceptance"]["p"] for p in res["points"])
+    assert res["points"][0]["assignment"] == {"preset:noise": 0.0}
+    assert clean == 1.0 and noisy < 0.8
+
+
+def test_attack_preset_compare_with_references():
+    from qpvsim.experiments import run_experiment
+    doc = scenario.build(dim=2)
+    res = run_experiment(doc, {"runs": 60, "seed": 4,
+                               "sweep": [{"preset": "attack", "values": ["honest", "teleport", "guess"]}]})
+    rates = [p["summary"]["acceptance"]["p"] for p in res["points"]]
+    assert rates[0] == 1.0 and rates[1] == 1.0 and rates[2] < 0.4
+    assert presets.reference(doc, "unentangled")["value"] == pytest.approx(0.8535533905932737)
+    assert presets.reference(doc, "guess")["value"] == 0.125
+    assert presets.reference(doc, "teleport")["value"] == 1.0

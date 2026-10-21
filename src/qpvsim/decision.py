@@ -10,7 +10,7 @@ and the timing of the consumed messages.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from . import timeunits as tu
 
@@ -31,6 +31,46 @@ def classify_reason(v: Dict[str, Any]) -> str:
     if v.get("trigger_type") == "receive":
         return "wrong_answer"
     return "rejected"
+
+
+def _ns(fs: int) -> str:
+    return f"{fs / tu.NS:.3f} ns"
+
+
+def explain(sim: "Simulation", vid: str, entry: Dict[str, Any]) -> Tuple[str, List[Dict[str, Any]]]:
+    """One plain sentence about a verifier's verdict, with references into the run."""
+    node = sim.nodes[vid]
+    if entry["status"] == "error":
+        return f"Rejected: {vid} halted: {node.error}", [{"kind": "participant", "id": vid}]
+    if entry["verdict"] is None:
+        return f"{vid} has not decided yet (state '{node.state}').", [{"kind": "participant", "id": vid}]
+    vd = node.verdict
+    refs = [{"kind": "event", "seq": vd["begin_record"]},
+            {"kind": "transition", "automaton": node.automaton.name, "id": vd["transition"]}]
+    deadline = next((r.data["fire_fs"] for r in reversed(sim.trace)
+                     if r.node == vid and r.kind == "timer.set" and r.data["name"] == "deadline"), None)
+    consumed = [sim.messages[m] for m in entry.get("consumed", [])]
+    if consumed:
+        m = consumed[0]
+        refs.insert(0, {"kind": "message", "id": m.id})
+    if vd["outcome"] == "accept":
+        early = f", {_ns(deadline - m.arrival_time)} before the deadline" if deadline is not None and consumed else ""
+        value = f" {m.value!r}" if consumed else ""
+        return f"Accepted: the correct answer{value} reached {vid} at {tu.fmt(vd['time_fs'], digits=3)}{early}.", refs
+    if consumed:  # judged on a message: a guard rejected it
+        failed = next((e for e in entry.get("evaluations") or [] if not e["result"]), None)
+        if failed:
+            refs.append({"kind": "transition", "automaton": node.automaton.name, "id": failed["transition"]})
+            return f"Rejected: {vid} received the answer {m.value!r}, which failed the check `{failed['guard']}`.", refs
+        return f"Rejected: {vid} received the answer {m.value!r}: {vd.get('reason') or 'no reason given'}.", refs
+    late = sorted((m for m in sim.messages.values() if m.dst == vid and m.depart_time is not None
+                   and m.status != "lost"), key=lambda m: m.depart_time + m.delay_fs)
+    when = f" ({tu.fmt(deadline)})" if deadline is not None else ""
+    if late and deadline is not None:
+        m = late[0]
+        refs.insert(0, {"kind": "message", "id": m.id})
+        return f"Rejected: the answer reaches {vid} {_ns(m.depart_time + m.delay_fs - deadline)} after its deadline{when}.", refs
+    return f"Rejected: no answer was sent to {vid} before its deadline{when}.", refs
 
 
 def decide(sim: "Simulation") -> Dict[str, Any]:
@@ -81,6 +121,7 @@ def decide(sim: "Simulation") -> Dict[str, Any]:
             entry["status"] = "undecided"
             lines.append(f"{vid} has not reached a verdict (state '{node.state}')")
         entry["category"] = classify_reason(entry)
+        entry["sentence"], entry["refs"] = explain(sim, vid, entry)
         per.append(entry)
     accepts = sum(1 for e in per if e["verdict"] == "accept")
     n = len(per)
@@ -99,5 +140,5 @@ def decide(sim: "Simulation") -> Dict[str, Any]:
     summary = (f"Position claim {outcome.upper()}ED: {accepts}/{n} verifiers accepted; rule: {rule_text}."
                if outcome != "pending" else f"Undecided so far: {accepts}/{n} verifiers accepted; rule: {rule_text}.")
     return {"outcome": outcome, "rule": rule, "rule_text": rule_text, "accepts": accepts,
-            "verifiers": per, "complete": complete, "summary": summary, "explanation": lines,
+            "verifiers": per, "sentences": [e["sentence"] for e in per], "complete": complete, "summary": summary, "explanation": lines,
             "claim": sim.project.get("claim")}

@@ -7,7 +7,8 @@ An experiment definition::
      "patch": {"simulation.backend": "state_vector"},   # optional fixed overrides
      "workers": 1}
 
-Several sweep axes form a Cartesian grid.  Run ``i`` of grid point ``k`` uses
+Several sweep axes form a Cartesian grid.  An axis may name a QPV preset instead of a path,
+``{"preset": "noise", "values": [...]}`` (see :mod:`qpvsim.qpv.presets`).  Run ``i`` of grid point ``k`` uses
 the seed ``SeedSequence([seed, k, i]).generate_state(1, uint64)[0]``, which is
 recorded with the run, so any single run can be reproduced exactly with
 ``Simulation(project_with_patch, seed=run_seed)``.
@@ -30,6 +31,7 @@ import numpy as np
 from .decision import decide
 from .engine import ENGINE_VERSION, Simulation
 from .protocol.project import normalize, set_path, validate_project, errors, ProjectError
+from .qpv import presets
 
 Z95 = 1.959963984540054
 
@@ -54,14 +56,18 @@ def run_seed(master: int, point: int, i: int) -> int:
 def grid(sweep: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if not sweep:
         return [{}]
-    axes = [[(ax["path"], v) for v in ax["values"]] for ax in sweep]
+    axes = [[(ax.get("path") or f"preset:{ax['preset']}", v) for v in ax["values"]] for ax in sweep]
     return [dict(combo) for combo in itertools.product(*axes)]
 
 
 def apply_patch(project: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
     doc = copy.deepcopy(project)
-    for path, value in patch.items():
-        set_path(doc, path, copy.deepcopy(value))
+    # QPV presets first (the attack preset rebuilds participants), then plain path edits
+    for path, value in sorted(patch.items(), key=lambda kv: kv[0] != "preset:attack"):
+        if path.startswith("preset:"):
+            doc = presets.apply(doc, path[len("preset:"):], copy.deepcopy(value))
+        else:
+            set_path(doc, path, copy.deepcopy(value))
     return normalize(doc)
 
 
