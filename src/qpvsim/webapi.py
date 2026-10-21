@@ -36,6 +36,7 @@ from .quantum import backend_catalog
 from .session import Session, SessionError
 
 Result = Tuple[int, Any, str]
+MAX_GRID = 256  # light-cone grid cells per side
 
 
 class NotFound(Exception):
@@ -102,7 +103,7 @@ class WebAPI:
                         return fn(body=body, query=query, **match.groupdict())
                 except NotFound as exc:
                     return 404, {"detail": str(exc)}, "json"
-                except (SessionError, KeyError, ValueError) as exc:
+                except (SessionError, KeyError, ValueError, TypeError, IndexError) as exc:  # bad request bodies
                     msg = exc.args[0] if exc.args else str(exc)
                     return 400, {"detail": str(msg)}, "json"
         return 404, {"detail": f"no route for {method} {parts.path}"}, "json"
@@ -200,7 +201,8 @@ class WebAPI:
         p = self.session.project
         if body.get("point") is not None:
             return self.ok(lightcone.point(p, body["point"], body.get("tau_ns")))
-        return self.ok(lightcone.grid(p, int(body.get("n", 96)), body.get("tau_ns"), body.get("z"), body.get("bounds")))
+        n = min(MAX_GRID, max(2, int(body.get("n", 96))))
+        return self.ok(lightcone.grid(p, n, body.get("tau_ns"), body.get("z"), body.get("bounds")))
 
     # ------------------------------------------------------------ simulation
     def reset(self, body=None, **_) -> Result:

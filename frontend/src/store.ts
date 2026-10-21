@@ -102,9 +102,10 @@ export const useStore = create<Store>((set, get) => {
 
   // Replace the project with one the engine built (scenario, attack switch, auto-wiring).
   const install = async (r: ProjectResponse, toast: string) => {
+    const before = get().project;  // undo returns to the project as it was before the engine rebuilt it
     applyProject(r);
     history.replaceState(null, "", window.location.pathname + window.location.search);
-    set({ past: [...get().past.slice(-99), get().project!], future: [], selection: { kind: "project" }, highlightChain: [],
+    set({ past: before ? [...get().past.slice(-99), before] : get().past, future: [], selection: { kind: "project" }, highlightChain: [],
       focus: r.project.participants.find((p) => p.role === "verifier")?.id ?? null });
     await get().refreshSim(true);
     get().setToast(toast);

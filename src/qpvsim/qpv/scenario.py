@@ -209,6 +209,7 @@ def autowire(project: Dict[str, Any]) -> Dict[str, Any]:
 
     Settings of an existing link with the same id (noise, latency, ...) are kept."""
     doc = normalize(copy.deepcopy(project))
+    qpv_verifiers(doc)  # the conventions below only describe QPV setups; never rewire anything else
     old = {lk["id"]: lk for lk in doc["links"]}
     ports = {p["id"]: port_kinds(doc["automata"].get(p["automaton"]) or {}) for p in doc["participants"]}
     vids = verifier_ids(doc)

@@ -167,3 +167,10 @@ def test_attack_preset_compare_with_references():
     assert presets.reference(doc, "unentangled")["value"] == pytest.approx(0.8535533905932737)
     assert presets.reference(doc, "guess")["value"] == 0.125
     assert presets.reference(doc, "teleport")["value"] == 1.0
+
+
+def test_explanation_reports_sub_picosecond_lateness_in_fs():
+    from qpvsim import Simulation
+    sim = Simulation(scenario.build(dim=1, attack="teleport", tolerance_ns=0)).run()
+    s = {v["id"]: v["sentence"] for v in sim.snapshot()["decision"]["verifiers"]}["V0"]
+    assert s.startswith("Rejected: the answer reaches V0 1 fs after its deadline")

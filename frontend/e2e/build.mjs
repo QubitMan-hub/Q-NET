@@ -175,6 +175,10 @@ await settle();
 proj = (await api("/api/project")).project;
 check(proj.links.map((l) => `${l.id}:${l.kind}:${l.a.node}.${l.a.port}-${l.b.node}.${l.b.port}`).join(",")
   === "q0:quantum:V.prover-P.v0,c0:classical:V.prover-P.v0,c1:classical:V2.prover-P.v1", `Auto-wire creates the required links (${proj.links.map((l) => l.id)})`);
+await page.keyboard.press("Escape");
+await page.keyboard.press("Control+z");
+await settle();
+check((await api("/api/project")).project.links.length === 0, "undo after Auto-wire restores the previous wiring");
 
 check(errors.length === 0, `no browser errors (${errors.slice(0, 3).join(" | ")})`);
 await browser.close();

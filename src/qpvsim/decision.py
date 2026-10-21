@@ -34,7 +34,7 @@ def classify_reason(v: Dict[str, Any]) -> str:
 
 
 def _ns(fs: int) -> str:
-    return f"{fs / tu.NS:.3f} ns"
+    return f"{fs} fs" if abs(fs) < tu.PS else f"{fs / tu.NS:.3f} ns"
 
 
 def explain(sim: "Simulation", vid: str, entry: Dict[str, Any]) -> Tuple[str, List[Dict[str, Any]]]:

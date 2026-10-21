@@ -177,6 +177,7 @@ function NetworkInner() {
   const issues = useStore((s) => s.issues);
   const vtypes = useStore((s) => s.verifierTypes);
   const autowire = useStore((s) => s.autowire);
+  const qpv = useStore((s) => s.analysis?.qpv ?? false);
   const setView = useStore((s) => s.setView);
   const setFocus = useStore((s) => s.setFocus);
   const rf = useReactFlow();
@@ -269,7 +270,8 @@ function NetworkInner() {
       <div className="canvas-tools">
         <input placeholder="Find participant…" value={search} onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && find()} aria-label="Find participant" />
-        <button className="btn ghost" title={GLOSSARY.autowire} onClick={autowire} data-testid="btn-autowire"><Icon.wire />Auto-wire</button>
+        <button className="btn ghost" title={qpv ? GLOSSARY.autowire : "Auto-wire needs a QPV setup: a quantum verifier and classical verifiers from the QPV library."}
+          onClick={autowire} disabled={!qpv} data-testid="btn-autowire"><Icon.wire />Auto-wire</button>
         <button className="btn ghost" title="Lay out by physical x position" onClick={arrangeByPosition}><Icon.layout />Arrange by position</button>
         <button className="btn ghost" title="Fit view" onClick={() => rf.fitView({ duration: 250, padding: 0.2 })}><Icon.fit /></button>
       </div>

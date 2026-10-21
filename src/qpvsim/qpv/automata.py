@@ -10,8 +10,9 @@ verification protocol that is secure against multi-qubit attacks", Nature Physic
 
 f is pluggable (``combine`` parameter): ``xor`` (shares are bits) or ``inner_product`` (shares are
 n-bit strings, b = sum_j prod_i s_i[j] mod 2).  XOR is breakable with k EPR pairs by the
-teleportation chain below and does NOT inherit the Bluhm-Christandl-Speelman security guarantee,
-which needs f with high garden-hose complexity such as the inner product.
+teleportation chain below and does NOT inherit the Bluhm-Christandl-Speelman security guarantee:
+they prove security against attackers holding a linear number of qubits for most functions f
+(e.g. a random f), not for every f, and certainly not for XOR.
 
 Attacks (one attacker E_j on each verifier's segment to the claim):
 * unentangled -- E_0 measures the qubit at once (Breidbart basis by default) and broadcasts the bit;

@@ -99,3 +99,22 @@ def test_decision_results_link_to_the_trace():
     assert "Accepted: the correct answer" in r.output
     assert {x["kind"] for x in r.refs} == {"message", "event", "transition"}
     assert r.as_dict()["refs"] == r.refs
+
+
+# ---------------------------------------------------------------- review fixes
+def test_autowire_refuses_non_qpv_projects(client):
+    client.post("/api/project/example/cpv_honest")
+    r = client.post("/api/qpv/autowire")
+    assert r.status_code == 400 and "QPV" in r.json()["detail"]
+    assert len(client.get("/api/project").json()["project"]["links"]) == 2  # wiring untouched
+    c = Console(Session(example("cpv_honest")))
+    assert not c.execute("autowire").ok and len(c.session.project["links"]) == 2
+
+
+def test_malformed_qpv_bodies_are_rejected_and_grids_bounded():
+    api = WebAPI(background_experiments=False)
+    for body in ({"bounds": [[0, 1]]}, {"bounds": "x"}, {"point": [None]}):
+        assert api.handle("POST", "/api/qpv/lightcone", body)[0] == 400, body
+    assert api.handle("POST", "/api/qpv/scenario", {"colour": "red"})[0] == 400
+    st, g, _ = api.handle("POST", "/api/qpv/lightcone", {"n": 5000})
+    assert st == 200 and g["n"] == 256
