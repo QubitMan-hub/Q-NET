@@ -36,6 +36,7 @@ from typing import Any, Dict, List, Optional, Set
 from .expr import ENGINE_FUNCTIONS, PURE_FUNCTIONS, functions_used, names_used, validate_syntax
 
 TRIGGER_TYPES = {"start", "timer", "receive", "auto"}
+LINK_KINDS = ("quantum", "classical")
 STATE_KINDS = {"initial", "normal", "terminal"}
 OUTCOMES = {None, "accept", "reject", "abort", "done", "error"}
 
@@ -148,6 +149,26 @@ def _expr_fields(action: Dict[str, Any]) -> List[str]:
     return [f for f in meta.get("exprs", []) if f in action]
 
 
+def _actions(spec: Dict[str, Any]):
+    for t in spec.get("transitions") or []:
+        yield from (a for a in t.get("actions") or [] if isinstance(a, dict))
+
+
+def required_ports(spec: Dict[str, Any]) -> Set[tuple]:
+    """(port, kind) pairs the automaton needs linked; kind None = any (ports it receives on)."""
+    sends = {(a.get("port"), "quantum" if a["op"] == "send_qubit" else "classical")
+             for a in _actions(spec) if a.get("op") in ("send", "send_qubit")}
+    recvs = {((t.get("trigger") or {}).get("port"), None) for t in spec.get("transitions") or []}
+    return {(p, k) for p, k in sends | recvs if p}
+
+
+def port_kinds(spec: Dict[str, Any]) -> Dict[str, Set[str]]:
+    """Link kinds each port carries: declared in ``port_kinds``, otherwise both."""
+    declared = spec.get("port_kinds") or {}
+    ports = set(spec.get("ports") or []) | {p for p, _ in required_ports(spec)} | set(declared)
+    return {p: set(declared.get(p, LINK_KINDS)) for p in sorted(ports)}
+
+
 def automaton_operations(spec: Dict[str, Any]) -> Dict[str, Set[str]]:
     """Static summary of operations used (for capability pre-checks)."""
     ops: Dict[str, Set[str]] = {"ops": set(), "gates": set(), "bases": set()}
@@ -208,6 +229,9 @@ def validate_automaton(name: str, spec: Dict[str, Any], base: str = "") -> List[
             err(f"{p}", f"name {nm!r} is reserved")
     known_names = set(params) | set(variables) | BUILTIN_NAMES
     ports = set(spec.get("ports", []) or [])
+    for port, kinds in (spec.get("port_kinds") or {}).items():
+        if not isinstance(kinds, list) or not set(kinds) <= set(LINK_KINDS):
+            err(f"{p}.port_kinds.{port}", f"port kinds must be a list drawn from {list(LINK_KINDS)}")
 
     timers_set: Set[str] = set()
     timers_used: Set[str] = set()

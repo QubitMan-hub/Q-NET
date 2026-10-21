@@ -17,7 +17,9 @@ from typing import Any, Dict, List, Optional, Union
 
 from ..quantum import BACKENDS
 from ..timeunits import SPEED_OF_LIGHT_MPS
-from .automaton import Issue, automaton_operations, validate_automaton
+from ..qpv.geometry import geometry_issues
+from .automaton import (LINK_KINDS, Issue, automaton_operations, port_kinds, required_ports,
+                        validate_automaton)
 from .capabilities import make_capabilities
 from .expr import validate_syntax
 
@@ -90,6 +92,8 @@ def normalize(doc: Dict[str, Any]) -> Dict[str, Any]:
     doc.setdefault("verification", {"rule": "all", "verifiers": None})
     doc.setdefault("experiments", [])
     for p in doc["participants"]:
+        if p.get("role") == "verifier" and "verifier_type" not in p:
+            p["verifier_type"] = verifier_type(doc, p)
         p.setdefault("role", "other")
         p.setdefault("label", p.get("id"))
         p.setdefault("params", {})
@@ -127,6 +131,15 @@ def link_length_m(project: Dict[str, Any], link: Dict[str, Any]) -> float:
     a = participant(project, link["a"]["node"])
     b = participant(project, link["b"]["node"])
     return math.dist(a["position"], b["position"])
+
+
+def verifier_type(project: Dict[str, Any], p: Dict[str, Any]) -> Optional[str]:
+    """'quantum' if the participant's automaton prepares or sends qubits, else 'classical'."""
+    if p.get("verifier_type"):
+        return p["verifier_type"]
+    spec = (project.get("automata") or {}).get(p.get("automaton")) or {}
+    ops = automaton_operations(spec)["ops"] if spec.get("transitions") else set()
+    return "quantum" if ops & {"prepare", "prepare_bb84", "send_qubit"} else "classical"
 
 
 def verifier_ids(project: Dict[str, Any]) -> List[str]:
@@ -173,6 +186,8 @@ def validate_project(project: Dict[str, Any]) -> List[Issue]:
         ids.add(pid)
         if p.get("role") not in ROLES:
             err(f"{pp}.role", f"role must be one of {sorted(ROLES)}")
+        if p.get("verifier_type") not in (None, "quantum", "classical"):
+            err(f"{pp}.verifier_type", "verifier_type must be 'quantum' or 'classical'")
         pos = p.get("position")
         if (not isinstance(pos, list) or not 1 <= len(pos) <= 3
                 or not all(isinstance(x, (int, float)) for x in pos)):
@@ -259,6 +274,10 @@ def validate_project(project: Dict[str, Any]) -> List[Issue]:
                 aports = aspec.get("ports")
                 if aports is not None and port not in aports:
                     warn(f"{lp}", f"port {port!r} is not used by {node}'s automaton")
+                kinds = port_kinds(aspec).get(port)
+                if kinds and link.get("kind") in LINK_KINDS and link["kind"] not in kinds:
+                    err(f"{lp}.kind", f"{node}.{port} carries only {' and '.join(sorted(kinds))} signals; "
+                                      f"a {link['kind']} link needs a {link['kind']} port at both ends")
         sp = link.get("speed_mps")
         if sp is not None:
             if not isinstance(sp, (int, float)) or sp <= 0:
@@ -288,6 +307,15 @@ def validate_project(project: Dict[str, Any]) -> List[Issue]:
                 err(f"{lp}.noise.{k}", "must be a probability in [0, 1]")
         if link.get("kind") == "classical" and link.get("noise"):
             warn(f"{lp}.noise", "quantum noise parameters on a classical link are ignored")
+
+    linked = {(e["node"], e["port"], lk.get("kind")) for lk in project["links"]
+              for e in (lk.get("a"), lk.get("b")) if isinstance(e, dict)}
+    for p in project["participants"]:
+        spec = automata.get(p.get("automaton")) or {}
+        for port, kind in sorted(required_ports(spec), key=str):
+            if not any((p.get("id"), port, k) in linked for k in ([kind] if kind else LINK_KINDS)):
+                warn(f"participants[{p.get('id')}]", f"port {port!r} is not connected"
+                     + (f" to a {kind} link" if kind else "") + f"; {p.get('id')} uses it")
 
     # resources
     for i, r in enumerate(project["resources"]):
@@ -332,11 +360,16 @@ def validate_project(project: Dict[str, Any]) -> List[Issue]:
     cpos = claim.get("position")
     if not isinstance(cpos, list) or not cpos:
         err("claim.position", "claimed position must be a list of coordinates")
+    if project["physics"].get("dimension") not in (None, 1, 2, 3):
+        err("physics.dimension", "dimension must be 1, 2 or 3 (or absent to detect it)")
     dims = {len(p["position"]) for p in project["participants"] if isinstance(p.get("position"), list)}
     if isinstance(cpos, list):
         dims.add(len(cpos))
     if len(dims) > 1:
         err("participants", "all positions (and the claim) must have the same number of coordinates")
+    elif not errors(issues):
+        for path, msg in geometry_issues(project, [v for v in verifier_ids(project) if v in ids]):
+            warn(path, msg)
 
     ver = project["verification"]
     if ver.get("rule", "all") not in ("all", "any", "k_of_n"):
