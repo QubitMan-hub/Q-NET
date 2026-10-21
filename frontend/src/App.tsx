@@ -5,7 +5,7 @@ import type { Project } from "./types";
 import { GLOSSARY } from "./glossary";
 import { NetworkCanvas } from "./components/NetworkCanvas";
 import { AutomatonCanvas } from "./components/AutomatonCanvas";
-import { Spacetime } from "./components/Spacetime";
+import { Geometry } from "./components/SpaceView";
 import { Inspector } from "./components/Inspector";
 import { ConsolePanel, DecisionPanel, EventLog, Experiments, Timeline, ValidationPanel } from "./components/Dock";
 import { Brand, Icon } from "./components/ui";
@@ -309,7 +309,7 @@ export default function App() {
               <button className={`tab${s.view === "network" ? " on" : ""}`} onClick={() => s.setView("network")} role="tab">Network</button>
               <button className={`tab${s.view === "automaton" ? " on" : ""}`} onClick={() => s.setView("automaton")} role="tab">
                 Automaton{s.focus ? <span className="count">{s.focus} · {focusAut}</span> : null}</button>
-              <button className={`tab${s.view === "spacetime" ? " on" : ""}`} onClick={() => s.setView("spacetime")} role="tab">Spacetime</button>
+              <button className={`tab${s.view === "spacetime" ? " on" : ""}`} onClick={() => s.setView("spacetime")} role="tab">Geometry</button>
               <span className="spacer" />
               <span className="xs muted" style={{ alignSelf: "center", paddingRight: 10 }}>
                 {s.project.meta.protocol.name} · backend {s.project.simulation.backend} · seed {s.sim?.seed ?? s.project.simulation.seed}
@@ -318,7 +318,7 @@ export default function App() {
             <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex" }}>
               {s.view === "network" && <NetworkCanvas />}
               {s.view === "automaton" && <AutomatonCanvas />}
-              {s.view === "spacetime" && <Spacetime />}
+              {s.view === "spacetime" && <Geometry />}
             </div>
           </div>
           <div className="splitter-h" onPointerDown={dragDock} role="separator" aria-orientation="horizontal" />

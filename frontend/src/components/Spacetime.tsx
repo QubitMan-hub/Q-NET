@@ -1,28 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
-import { nsLabel } from "../format";
-import { Check } from "./ui";
-
-const C = 299_792_458;
-const NS_PER_M = 1e9 / C;
-
-function useSize(ref: React.RefObject<HTMLDivElement>) {
-  const [size, setSize] = useState({ w: 800, h: 500 });
-  useEffect(() => {
-    if (!ref.current) return;
-    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
-    ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, [ref]);
-  return size;
-}
-
-function niceStep(range: number, target: number) {
-  const raw = range / target;
-  const p = Math.pow(10, Math.floor(Math.log10(raw)));
-  const m = raw / p;
-  return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
-}
+import { NS_PER_M, niceStep, nsLabel } from "../format";
+import { Check, useSize } from "./ui";
 
 /** Spacetime (Minkowski) diagram of the run: x = position along the verifier axis, time upward. */
 export function Spacetime() {

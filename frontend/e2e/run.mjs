@@ -150,6 +150,32 @@ await page.click('[data-testid="dock-decision"]');
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${SHOTS}/08-decision.png` });
 
+// Geometry: the dimension picks the view; the light-cone checker answers clicks on the map
+await post("/api/qpv/scenario", { id: "2d_teleport" });
+await page.reload();
+await page.waitForSelector('[data-testid="node-V0"]');
+await page.keyboard.press("3");
+await page.waitForSelector('[data-testid="space-map"] [data-testid="lc-shading"]', { timeout: 15000 });
+check((await page.textContent('[data-testid="lc-region"]')).includes("7.5 cm of the claim"),
+  "a 2D setup opens on the map with the light-cone shading and the size of the impersonation region");
+const ring = await page.locator('[data-testid="lc-ring"]').boundingBox();
+await page.mouse.click(ring.x + ring.width / 2, ring.y + ring.height / 2);
+await page.waitForSelector('[data-testid="lc-probe"]');
+check((await page.textContent('[data-testid="lc-probe"]')).includes("answers every verifier in time"), "clicking the claim: a lone adversary there meets every deadline");
+const v0 = await page.locator('[data-testid="space-node-V1"]').boundingBox();
+await page.mouse.click(v0.x + v0.width / 2 + 40, v0.y + v0.height / 2);
+await page.waitForTimeout(500);
+check(/misses V\d's deadline by/.test(await page.textContent('[data-testid="lc-probe"]')), "clicking near a verifier: the adversary misses a deadline, by how much");
+await page.screenshot({ path: `${SHOTS}/09-map-lightcone.png` });
+await post("/api/qpv/scenario", { id: "3d_honest" });
+await page.reload();
+await page.waitForSelector('[data-testid="node-V0"]');
+await page.keyboard.press("3");
+await page.waitForSelector('[data-testid="space-3d"]');
+check(await page.locator('[data-testid^="space-node-"]').count() === 5, "a 3D setup opens in the 3D view with 4 verifiers and the prover");
+await page.click('.canvas-tools button:text-is("top")');
+await page.screenshot({ path: `${SHOTS}/10-3d-top.png` });
+
 check(consoleErrors.length === 0, `no browser errors (${consoleErrors.slice(0, 3).join(" | ")})`);
 await browser.close();
 if (failures.length) { console.error(`${failures.length} check(s) failed`); process.exit(1); }

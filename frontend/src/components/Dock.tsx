@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import { api } from "../api";
-import { KIND_COLOR, nsLabel, ns } from "../format";
+import { KIND_COLOR, niceStep, nsLabel, ns } from "../format";
 import { Experiments } from "./Experiments";
-import { Icon } from "./ui";
+import { Icon, useSize } from "./ui";
 
 // ======================================================================= events
 export function EventLog() {
@@ -73,14 +73,8 @@ export function Timeline() {
   const project = useStore((s) => s.project);
   const select = useStore((s) => s.select);
   const wrap = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(900);
+  const { w: width } = useSize(wrap);
   const [zoom, setZoom] = useState(1);
-  useEffect(() => {
-    if (!wrap.current) return;
-    const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width));
-    ro.observe(wrap.current);
-    return () => ro.disconnect();
-  }, []);
   if (!sim || !project) return <div className="empty">No simulation to show.</div>;
   const nodes = project.participants.map((p) => p.id).filter((id) => sim.nodes[id]);
   const tmax = Math.max(sim.now_fs, ...sim.messages.map((m) => m.arrival_time_fs ?? 0), 1) * 1.04;
@@ -88,7 +82,7 @@ export function Timeline() {
   const W = Math.max(400, (width - left - 20) * zoom);
   const X = (fs: number) => left + (fs / tmax) * W;
   const H = nodes.length * laneH + 30;
-  const step = (() => { const raw = tmax / 1e6 / 10; const p = 10 ** Math.floor(Math.log10(raw)); const m = raw / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; })();
+  const step = niceStep(tmax / 1e6, 10);
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div className="log-tools">

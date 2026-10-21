@@ -1,6 +1,16 @@
 // Formatting helpers. Times arrive from the engine as integer femtoseconds.
 
 export const FS_PER_NS = 1_000_000;
+export const C_MPS = 299_792_458;  // vacuum speed of light, exact
+export const NS_PER_M = 1e9 / C_MPS;
+
+/** A round axis step (1, 2 or 5 times a power of ten) giving about `target` ticks over `range`. */
+export function niceStep(range: number, target: number): number {
+  const raw = range / target;
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const m = raw / p;
+  return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+}
 
 export function ns(fs: number | null | undefined, digits = 6): string {
   if (fs === null || fs === undefined) return "—";

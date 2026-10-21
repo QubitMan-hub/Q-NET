@@ -1,4 +1,16 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type RefObject } from "react";
+
+/** Live content-box size of an element. */
+export function useSize(ref: RefObject<HTMLElement>) {
+  const [size, setSize] = useState({ w: 800, h: 500 });
+  useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, [ref]);
+  return size;
+}
 
 // Inputs commit on Enter or blur, so each edit produces one undo step and one
 // engine reset rather than one per keystroke.

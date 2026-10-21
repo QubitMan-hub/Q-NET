@@ -200,6 +200,23 @@ code, .mono { font-family: var(--font-code); font-size: 0.92em; font-variant-num
 .swatch.prover { background: var(--prover); }
 .swatch.adversary { background: var(--adversary); }
 .swatch.other { background: var(--other); }
+.geo { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.geo-modes { display: flex; align-items: center; gap: 2px; padding: 4px 8px; border-bottom: 1px solid var(--rule); background: var(--panel); }
+.geo-modes .xs { margin-left: auto; }
+.geo-body { position: relative; flex: 1; min-height: 0; display: flex; }
+.lc-panel {
+  position: absolute; right: 10px; top: 10px; z-index: 5; width: 290px; display: grid; gap: 6px; padding: 9px 11px;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: var(--r-m); font-size: var(--fs-s); color: var(--ink-2);
+}
+.lc-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: var(--fs-xs); }
+.lc-legend .sw { width: 10px; height: 10px; border-radius: 2px; }
+.lc-legend .sw.red { background: var(--reject); opacity: 0.45; }
+.lc-legend .sw.green { background: var(--accept); opacity: 0.3; margin-left: 6px; }
+.lc-tau { display: grid; gap: 2px; font-size: var(--fs-xs); }
+.lc-tau input { width: 100%; accent-color: var(--focus); }
+.lc-probe { padding: 6px 8px; border-radius: var(--r-s); line-height: 1.45; color: var(--ink); }
+.lc-probe.bad { background: var(--adversary-soft); }
+.lc-probe.good { background: var(--prover-soft); }
 .advanced { margin-top: 6px; }
 .advanced > summary { cursor: pointer; font-size: var(--fs-s); color: var(--ink-3); padding: 2px 0; }
 .advanced > summary:hover { color: var(--ink); }
