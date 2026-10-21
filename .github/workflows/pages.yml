@@ -16,9 +16,11 @@ permissions:
   pages: write
   id-token: write
 
+# one queue per branch, so a skipped run on another branch is never cancelled;
+# never cancel a deployment that is already running
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
