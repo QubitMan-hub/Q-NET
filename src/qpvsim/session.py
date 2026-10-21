@@ -18,20 +18,11 @@ from .experiments import provenance, run_experiment
 from .invariants import check_trace
 from .library import automaton_library, example
 from .protocol.project import (ProjectError, get_path, load_project, normalize,
-                               save_project, set_path, validate_project)
+                               save_project, set_path, strip_ui, validate_project)
 
 
 class SessionError(RuntimeError):
     pass
-
-
-def _strip_ui(obj: Any) -> Any:
-    """The document without editor layout fields (``ui``), which never affect execution."""
-    if isinstance(obj, dict):
-        return {k: _strip_ui(v) for k, v in obj.items() if k != "ui"}
-    if isinstance(obj, list):
-        return [_strip_ui(v) for v in obj]
-    return obj
 
 
 class Session:
@@ -52,7 +43,7 @@ class Session:
         moving nodes on a canvas does not restart the run; loading always restarts it."""
         new = normalize(copy.deepcopy(doc))
         layout_only = (keep_run_if_layout_only and hasattr(self, "project")
-                       and _strip_ui(new) == _strip_ui(self.project))
+                       and strip_ui(new) == strip_ui(self.project))
         self.project = new
         if layout_only and self.sim is not None:
             # canvas layout does not influence execution: keep the running simulation

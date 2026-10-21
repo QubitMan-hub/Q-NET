@@ -131,6 +131,20 @@ def link_length_m(project: Dict[str, Any], link: Dict[str, Any]) -> float:
     return math.dist(a["position"], b["position"])
 
 
+def strip_ui(obj: Any) -> Any:
+    """The document without editor layout fields (``ui``), which never affect execution."""
+    if isinstance(obj, dict):
+        return {k: strip_ui(v) for k, v in obj.items() if k != "ui"}
+    if isinstance(obj, list):
+        return [strip_ui(v) for v in obj]
+    return obj
+
+
+def setup_key(project: Dict[str, Any]) -> str:
+    """Canonical text of everything that affects a run (cache key for analyses)."""
+    return json.dumps(strip_ui(project), sort_keys=True, default=str)
+
+
 def verifier_type(project: Dict[str, Any], p: Dict[str, Any]) -> Optional[str]:
     """'quantum' if the participant's automaton prepares or sends qubits, else 'classical'."""
     if p.get("verifier_type"):
