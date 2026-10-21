@@ -25,7 +25,7 @@ from .console import Console, _strip_runs
 from .experiments import results_to_csv, run_experiment
 from .library import EXAMPLES, automaton_library, example
 from .protocol.automaton import ACTIONS, TRIGGER_TYPES
-from .protocol.capabilities import profile_catalog
+from .protocol.capabilities import ROLE_PROFILES, profile_catalog
 from .protocol.expr import ENGINE_FUNCTIONS, PURE_FUNCTIONS
 from .protocol.project import normalize, validate_project
 from .quantum import backend_catalog
@@ -105,6 +105,7 @@ class WebAPI:
     def meta(self, **_) -> Result:
         return self.ok({
             "version": __version__, "backends": backend_catalog(), "profiles": profile_catalog(),
+            "role_profiles": ROLE_PROFILES,
             "actions": {k: {"required": v["required"], "exprs": v["exprs"], "doc": v["doc"]} for k, v in ACTIONS.items()},
             "triggers": sorted(TRIGGER_TYPES),
             "functions": {**{k: "builtin" for k in PURE_FUNCTIONS}, **ENGINE_FUNCTIONS},

@@ -105,7 +105,7 @@ await page.screenshot({ path: `${SHOTS}/inspector.png` });
 // console
 area = "console";
 await page.click('[data-testid="dock-console"]');
-for (const c of ["help", "participants", "node E0", "fsm E1", "queue", "chain 6", "decision", "invariants", "time", "links", "messages", "events last=5", "reset", "run until=15", "step 2", "run", "why", "nonsense", "node", "batch 30 sweep=participants.E0.processing_ns:0,0.6"]) {
+for (const c of ["help", "participants", "node E0", "fsm E1", "queue", "chain 6", "decision", "invariants", "time", "links", "messages", "events last=5", "timing", "geometry", "strategies", "strategy E0", "profiles", "help set", "reset", "run until=15", "step 2", "run", "why", "nonsense", "node", "batch 30 sweep=participants.E0.processing_ns:0,0.6"]) {
   await page.fill('[data-testid="console-input"]', c);
   await page.press('[data-testid="console-input"]', "Enter");
   await page.waitForFunction(() => !document.querySelector(".cx-entry.running"), null, { timeout: 60000 }).catch(() => note(area, `'${c}' did not finish`));

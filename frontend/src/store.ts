@@ -23,7 +23,7 @@ import type { Issue, Project, Selection, SimState } from "./types";
 export type CanvasView = "network" | "automaton" | "spacetime";
 export type DockTab = "events" | "timeline" | "console" | "experiments" | "validation" | "decision";
 
-export interface ConsoleEntry { id: number; cmd: string; status: "running" | "ok" | "error"; text: string; data?: any }
+export interface ConsoleEntry { id: number; cmd: string; status: "running" | "ok" | "error"; text: string; data?: any; view?: string | null }
 
 interface Store {
   meta: any | null;
@@ -285,7 +285,7 @@ export const useStore = create<Store>((set, get) => {
         const since = get().sim?.trace.length ?? 0;
         const rev = get().revision;
         const r = await api.console(line, since);
-        patch({ status: r.result.ok ? "ok" : "error", text: r.result.output || (r.result.ok ? "Done." : "That did not work."), data: r.result.data });
+        patch({ status: r.result.ok ? "ok" : "error", text: r.result.output || (r.result.ok ? "Done." : "That did not work."), data: r.result.data, view: r.result.view });
         if (r.state.revision !== rev) {
           applyProject(await api.project());
           await get().refreshSim(true);

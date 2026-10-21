@@ -10,7 +10,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from . import timeunits as tu
 from .engine import ENGINE_VERSION, Simulation
@@ -85,21 +85,27 @@ class Session:
     def validate(self) -> List[Dict[str, Any]]:
         return [i.as_dict() for i in validate_project(self.project)]
 
-    def edit(self, path: str, value: Any, reset: bool = True) -> None:
+    def modify(self, fn: Callable[[Dict[str, Any]], None], reset: bool = True) -> None:
+        """Apply ``fn`` to a copy of the project, then install the copy (restarting the run)."""
         doc = copy.deepcopy(self.project)
-        set_path(doc, path, value)
+        fn(doc)
         self.set_project(doc, reset=reset)
+
+    def edit(self, path: str, value: Any, reset: bool = True) -> None:
+        self.modify(lambda doc: set_path(doc, path, value), reset=reset)
 
     def get(self, path: str) -> Any:
         return get_path(self.project, path)
 
     def use_strategy(self, participant: str, automaton: str) -> None:
         lib = automaton_library()
-        if automaton not in self.project["automata"]:
-            if automaton not in lib:
-                raise SessionError(f"unknown automaton {automaton!r}")
-            self.project["automata"][automaton] = copy.deepcopy(lib[automaton])
-        self.edit(f"participants.{participant}.automaton", automaton)
+        if automaton not in self.project["automata"] and automaton not in lib:
+            raise SessionError(f"unknown automaton {automaton!r}")
+
+        def apply(doc):
+            doc["automata"].setdefault(automaton, copy.deepcopy(lib.get(automaton)))
+            set_path(doc, f"participants.{participant}.automaton", automaton)
+        self.modify(apply)
 
     # ------------------------------------------------------------ simulation
     def reset(self, seed: Optional[int] = None) -> Optional[Simulation]:

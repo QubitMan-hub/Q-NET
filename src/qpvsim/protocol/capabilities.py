@@ -91,6 +91,11 @@ PROFILES: Dict[str, Dict[str, Any]] = {
 }
 
 
+# Profile given to a new participant of each role (editor and console).
+ROLE_PROFILES = {"verifier": "verifier", "prover": "honest_prover", "adversary": "no_entanglement",
+                 "other": "unrestricted"}
+
+
 def make_capabilities(spec: Any) -> Capabilities:
     """Build from a profile name, or a dict ``{"profile": name, **overrides}``."""
     if spec is None:

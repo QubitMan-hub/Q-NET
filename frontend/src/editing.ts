@@ -6,17 +6,6 @@ import { useStore } from "./store";
 import { clone, uniqueId } from "./format";
 import type { AutomatonSpec, Project, Role } from "./types";
 
-const DEFAULT_AUTOMATON: Record<Role, string[]> = {
-  verifier: ["qpv_bb84_verifier_quantum", "cpv_verifier"],
-  prover: ["qpv_bb84_honest_prover", "cpv_prover"],
-  adversary: ["qpv_bb84_adv_measure_broadcast", "qpv_bb84_adv_guess"],
-  other: [],
-};
-
-const DEFAULT_CAPS: Record<Role, string> = {
-  verifier: "verifier", prover: "honest_prover", adversary: "no_entanglement", other: "unrestricted",
-};
-
 export function blankAutomaton(name: string, role: Role): AutomatonSpec {
   return {
     name, role, description: "", ports: ["port"], params: {}, variables: {}, initial: "start",
@@ -44,7 +33,8 @@ export function addParticipant(role: Role, ui: { x: number; y: number }) {
   s.edit((p) => {
     let automaton = Object.values(p.automata).find((a) => a.role === role)?.name;
     if (!automaton) {
-      automaton = DEFAULT_AUTOMATON[role].find((n) => ensureAutomaton(p, n));
+      const lib: Record<string, AutomatonSpec> = s.meta?.automata ?? {};
+      automaton = Object.values(lib).find((a) => a.role === role && ensureAutomaton(p, a.name))?.name;
     }
     if (!automaton) {
       automaton = uniqueId(`${role}_automaton`, Object.keys(p.automata));
@@ -52,7 +42,7 @@ export function addParticipant(role: Role, ui: { x: number; y: number }) {
     }
     p.participants.push({
       id, role, label: id, position: [0, 0], automaton, params: {}, processing_ns: 0, start_ns: 0,
-      clock: { offset_ns: 0, drift_ppm: 0 }, capabilities: DEFAULT_CAPS[role], noise: {}, group: null,
+      clock: { offset_ns: 0, drift_ppm: 0 }, capabilities: s.meta?.role_profiles?.[role] ?? "unrestricted", noise: {}, group: null,
       ui: { x: Math.round(ui.x), y: Math.round(ui.y) },
     });
   }, { select: { kind: "participant", id } });

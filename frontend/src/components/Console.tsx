@@ -3,17 +3,8 @@ import { useStore, type ConsoleEntry } from "../store";
 import { api } from "../api";
 import { Icon } from "./ui";
 
-type CommandInfo = { name: string; usage: string; help: string; aliases: string[]; category: string };
-
-// One-click starting points shown before anything has been typed.
-const STARTERS: [string, string][] = [
-  ["Run to the end", "run"],
-  ["Take one step", "step"],
-  ["Why was it accepted or rejected?", "decision"],
-  ["Who is taking part?", "participants"],
-  ["What happens next?", "queue"],
-  ["Show all commands", "help"],
-];
+// The engine's command catalog drives everything here: groups, one-click starters and result views.
+type CommandInfo = { name: string; usage: string; help: string; aliases: string[]; category: string; starter?: string | null };
 
 const COLLAPSE_AT = 14;
 
@@ -57,9 +48,8 @@ function DecisionResult({ d }: { d: any }) {
 
 function Entry({ e, onRerun, onPick }: { e: ConsoleEntry; onRerun: (cmd: string) => void; onPick: (c: CommandInfo) => void }) {
   const [open, setOpen] = useState(false);
-  const word = e.cmd.trim().split(/\s+/)[0];
-  const isHelp = e.status === "ok" && (word === "help" || word === "?") && e.cmd.trim().split(/\s+/).length === 1 && Array.isArray(e.data);
-  const isDecision = e.status === "ok" && ["decision", "why", "explain"].includes(word) && e.data?.summary;
+  const isHelp = e.status === "ok" && e.view === "help" && Array.isArray(e.data);
+  const isDecision = e.status === "ok" && e.view === "decision" && e.data?.summary;
   const lines = e.text.split("\n");
   const long = lines.length > COLLAPSE_AT;
   const shown = long && !open ? lines.slice(0, COLLAPSE_AT).join("\n") : e.text;
@@ -148,9 +138,9 @@ export function ConsolePanel() {
               <h4>Ask the simulation</h4>
               <p>Commands run against the live engine, exactly like the buttons above. Start with one of these, or type your own below.</p>
               <div className="cx-starters">
-                {STARTERS.map(([label, cmd]) => (
-                  <button key={cmd} className="cx-chip" onClick={() => run(cmd)}>
-                    {label}<code>{cmd}</code>
+                {catalog.filter((c) => c.starter).map((c) => (
+                  <button key={c.name} className="cx-chip" onClick={() => run(c.name)}>
+                    {c.starter}<code>{c.name}</code>
                   </button>
                 ))}
               </div>
