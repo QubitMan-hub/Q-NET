@@ -37,7 +37,7 @@ def test_unknown_name_and_field_errors_are_reported():
 
 
 def _aut():
-    return copy.deepcopy(example("qpv_bb84_honest")["automata"]["qpv_bb84_verifier_quantum"])
+    return copy.deepcopy(example("qpv_bb84_honest")["automata"]["qpv_verifier_quantum"])
 
 
 def test_reference_automata_are_clean():

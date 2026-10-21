@@ -20,7 +20,7 @@ def _with_actions(doc, node_automaton, transition, actions):
 
 # ---------------------------------------------------------------- exact time, combine
 def test_fs_builtins_are_exact():
-    doc = _with_actions(example("qpv_bb84_honest"), "qpv_bb84_verifier_quantum", "arm", [
+    doc = _with_actions(example("qpv_bb84_honest"), "qpv_verifier_quantum", "arm", [
         {"op": "record", "key": "travel", "value": "claim_travel_fs"},
         {"op": "record", "key": "t", "value": "travel_fs(3)"},
         {"op": "record", "key": "ref", "value": "fs(t_ref_ns)"},
@@ -32,7 +32,7 @@ def test_fs_builtins_are_exact():
 
 
 def test_msg_time_fs_is_the_local_arrival():
-    doc = _with_actions(example("qpv_bb84_honest"), "qpv_bb84_verifier_quantum", "accept",
+    doc = _with_actions(example("qpv_bb84_honest"), "qpv_verifier_quantum", "accept",
                         [{"op": "record", "key": "arrived", "value": "msg.time_fs"}])
     sim = Simulation(doc).run()
     answer = next(m for m in sim.messages.values() if m.dst == "V0")
@@ -41,7 +41,7 @@ def test_msg_time_fs_is_the_local_arrival():
 
 def test_timer_at_fs_fires_exactly():
     doc = example("qpv_bb84_honest")
-    arm = doc["automata"]["qpv_bb84_verifier_quantum"]["transitions"][0]
+    arm = doc["automata"]["qpv_verifier_quantum"]["transitions"][0]
     arm["actions"][-1] = {"op": "timer", "name": "emit", "at_fs": "fs(t_ref_ns) - claim_travel_fs"}
     sim = Simulation(doc).run()
     q = next(m for m in sim.messages.values() if m.tag == "q")
@@ -51,14 +51,14 @@ def test_timer_at_fs_fires_exactly():
 
 def test_timer_rejects_non_integer_fs():
     doc = example("qpv_bb84_honest")
-    doc["automata"]["qpv_bb84_verifier_quantum"]["transitions"][0]["actions"][-1] = \
+    doc["automata"]["qpv_verifier_quantum"]["transitions"][0]["actions"][-1] = \
         {"op": "timer", "name": "emit", "at_fs": "1.5"}
     sim = Simulation(doc).run()
     assert sim.nodes["V0"].outcome == "error" and "integer" in sim.nodes["V0"].error
 
 
 def test_timer_needs_exactly_one_time_field():
-    spec = example("qpv_bb84_honest")["automata"]["qpv_bb84_verifier_quantum"]
+    spec = example("qpv_bb84_honest")["automata"]["qpv_verifier_quantum"]
     spec["transitions"][0]["actions"][-1] = {"op": "timer", "name": "emit", "at_fs": "1", "at_ns": "1"}
     assert any("exactly one" in i.message for i in validate_automaton("v", spec))
 
@@ -75,7 +75,7 @@ def test_combine_xor_and_inner_product():
 
 
 def test_rand_bits_draws_from_the_participant_stream():
-    doc = _with_actions(example("qpv_bb84_honest"), "qpv_bb84_verifier_quantum", "arm",
+    doc = _with_actions(example("qpv_bb84_honest"), "qpv_verifier_quantum", "arm",
                         [{"op": "record", "key": "bits", "value": "rand_bits(8)"}])
     bits = Simulation(doc).run().nodes["V0"].observations["bits"]
     assert len(bits) == 8 and set(bits) <= {0, 1}
@@ -121,7 +121,7 @@ def test_hull_warnings():
 
 def test_port_kind_mismatch_is_an_error():
     doc = example("qpv_bb84_honest")
-    doc["automata"]["qpv_bb84_verifier_classical"]["port_kinds"] = {"prover": ["classical"]}
+    doc["automata"]["qpv_verifier_classical"]["port_kinds"] = {"prover": ["classical"]}
     doc["links"][2]["kind"] = "quantum"
     errs = _issues(doc, "error")
     assert any("V1.prover carries only classical" in i.message for i in errs)

@@ -11,7 +11,8 @@
         "A. Kent, W. J. Munro, T. P. Spiller, 'Quantum tagging: authenticating location via quantum information and relativistic signalling constraints', Phys. Rev. A 84, 012326 (2011); arXiv:1008.2147",
         "H.-K. Lau, H.-K. Lo, 'Insecurity of position-based quantum-cryptography protocols against entanglement attacks', Phys. Rev. A 83, 012322 (2011); arXiv:1009.2256",
         "H. Buhrman, N. Chandran, S. Fehr, R. Gelles, V. Goyal, R. Ostrovsky, C. Schaffner, 'Position-based quantum cryptography: impossibility and constructions', SIAM J. Comput. 43(1) (2014); arXiv:1009.2490",
-        "M. Tomamichel, S. Fehr, J. Kaniewski, S. Wehner, 'A monogamy-of-entanglement game with applications to device-independent quantum cryptography', New J. Phys. 15, 103002 (2013); arXiv:1210.4359"
+        "M. Tomamichel, S. Fehr, J. Kaniewski, S. Wehner, 'A monogamy-of-entanglement game with applications to device-independent quantum cryptography', New J. Phys. 15, 103002 (2013); arXiv:1210.4359",
+        "A. Bluhm, M. Christandl, F. Speelman, 'A single-qubit position verification protocol that is secure against multi-qubit attacks', Nature Physics 18, 623 (2022); arXiv:2104.06301"
       ]
     },
     "assumptions": [
@@ -36,7 +37,7 @@
   "simulation": {
     "seed": 7,
     "backend": "density_matrix",
-    "max_time_ns": 1000,
+    "max_time_ns": 1000.0,
     "max_events": 100000,
     "stop_when": "verifiers_decided",
     "priorities": {}
@@ -57,7 +58,7 @@
         -3.0,
         0.0
       ],
-      "automaton": "qpv_bb84_verifier_quantum",
+      "automaton": "qpv_verifier_quantum",
       "params": {
         "t_ref_ns": 20.0,
         "tolerance_ns": 0.5
@@ -74,7 +75,8 @@
       "ui": {
         "x": 0,
         "y": 220
-      }
+      },
+      "verifier_type": "quantum"
     },
     {
       "id": "V1",
@@ -84,7 +86,7 @@
         3.0,
         0.0
       ],
-      "automaton": "qpv_bb84_verifier_classical",
+      "automaton": "qpv_verifier_classical",
       "params": {
         "t_ref_ns": 20.0,
         "tolerance_ns": 0.5
@@ -101,7 +103,8 @@
       "ui": {
         "x": 1040,
         "y": 220
-      }
+      },
+      "verifier_type": "classical"
     },
     {
       "id": "E0",
@@ -111,7 +114,7 @@
         -1.5,
         0.0
       ],
-      "automaton": "qpv_bb84_adv_teleport_sender",
+      "automaton": "qpv_adv_chain0_2v",
       "params": {},
       "processing_ns": 0.0,
       "start_ns": 0,
@@ -123,7 +126,7 @@
       "noise": {},
       "group": "coalition",
       "ui": {
-        "x": 300,
+        "x": 260,
         "y": 430
       }
     },
@@ -135,7 +138,7 @@
         1.5,
         0.0
       ],
-      "automaton": "qpv_bb84_adv_teleport_receiver",
+      "automaton": "qpv_adv_chain1_2v",
       "params": {},
       "processing_ns": 0.0,
       "start_ns": 0,
@@ -147,7 +150,7 @@
       "noise": {},
       "group": "coalition",
       "ui": {
-        "x": 740,
+        "x": 780,
         "y": 430
       }
     }
@@ -214,15 +217,15 @@
       "noise": {}
     },
     {
-      "id": "cE",
+      "id": "e01",
       "kind": "classical",
       "a": {
         "node": "E0",
-        "port": "partner"
+        "port": "p1"
       },
       "b": {
         "node": "E1",
-        "port": "partner"
+        "port": "p0"
       },
       "directed": false,
       "length_m": null,
@@ -244,49 +247,54 @@
       ],
       "vars": {
         "x": "rand_bit()",
-        "theta": "rand_bit()"
+        "shares": "[rand_bit()]"
       }
     },
     {
-      "id": "epr",
+      "id": "epr0",
       "type": "epr",
       "state": "phi+",
       "werner_p": 0,
       "holders": [
         {
           "node": "E0",
-          "slot": "e"
+          "slot": "out"
         },
         {
           "node": "E1",
-          "slot": "e"
+          "slot": "in"
         }
       ]
     }
   ],
   "automata": {
-    "qpv_bb84_verifier_quantum": {
-      "name": "qpv_bb84_verifier_quantum",
+    "qpv_verifier_quantum": {
+      "name": "qpv_verifier_quantum",
       "role": "verifier",
-      "description": "QPV_BB84 verifier that sends the BB84 qubit H^theta|x>. Accepts iff the answer equals x and arrives by the deadline t_ref + d(V, claim)/c + tolerance (local clock).",
+      "description": "Quantum verifier: sends the BB84 qubit H^b|x>, with b = combine(shares). Times its signal to reach the claimed position at t_ref and accepts iff the answer equals x and arrives by t_ref + d(V, claim)/c + tolerance (local clock, integer fs).",
       "ports": [
         "prover"
       ],
       "params": {
         "t_ref_ns": {
           "default": 20.0,
-          "description": "Agreed time at which both challenges reach the claimed position."
+          "description": "Agreed time at which all challenges reach the claimed position."
         },
         "tolerance_ns": {
           "default": 0.5,
           "description": "Allowed processing time of the prover (deadline slack)."
+        },
+        "combine": {
+          "default": "xor",
+          "description": "How the classical shares form the basis: xor | inner_product."
         }
       },
       "variables": {
         "x": 0,
-        "theta": 0,
-        "send_at": 0.0,
-        "deadline": 0.0,
+        "shares": [
+          0
+        ],
+        "deadline_fs": 0,
         "sent_at": 0.0
       },
       "initial": "idle",
@@ -307,8 +315,7 @@
           "ui": {
             "x": 0,
             "y": 140
-          },
-          "description": "Waiting for the emission instant."
+          }
         },
         {
           "id": "waiting",
@@ -322,22 +329,22 @@
         {
           "id": "accepted",
           "kind": "terminal",
-          "outcome": "accept",
           "label": "Accept",
           "ui": {
             "x": -300,
             "y": 470
-          }
+          },
+          "outcome": "accept"
         },
         {
           "id": "rejected",
           "kind": "terminal",
-          "outcome": "reject",
           "label": "Reject",
           "ui": {
             "x": 300,
             "y": 470
-          }
+          },
+          "outcome": "reject"
         }
       ],
       "transitions": [
@@ -353,18 +360,13 @@
           "actions": [
             {
               "op": "set",
-              "var": "send_at",
-              "expr": "fs_round(t_ref_ns - claim_travel_ns)"
-            },
-            {
-              "op": "set",
-              "var": "deadline",
-              "expr": "fs_round(t_ref_ns + claim_travel_ns + tolerance_ns)"
+              "var": "deadline_fs",
+              "expr": "fs(t_ref_ns) + claim_travel_fs + fs(tolerance_ns)"
             },
             {
               "op": "timer",
               "name": "emit",
-              "at_ns": "send_at"
+              "at_fs": "fs(t_ref_ns) - claim_travel_fs"
             }
           ]
         },
@@ -383,7 +385,7 @@
               "op": "prepare_bb84",
               "qubit": "q",
               "bit": "x",
-              "basis": "theta"
+              "basis": "combine(combine, shares)"
             },
             {
               "op": "send_qubit",
@@ -404,12 +406,12 @@
             {
               "op": "record",
               "key": "deadline_ns",
-              "value": "deadline"
+              "value": "deadline_fs / 1e6"
             },
             {
               "op": "timer",
               "name": "deadline",
-              "at_ns": "deadline"
+              "at_fs": "deadline_fs"
             }
           ]
         },
@@ -424,7 +426,7 @@
             ],
             "port": "prover"
           },
-          "guard": "msg.value == x and msg.time <= deadline",
+          "guard": "msg.value == x and msg.time_fs <= deadline_fs",
           "label": "correct & on time",
           "duration_ns": 0,
           "actions": [
@@ -445,7 +447,7 @@
             {
               "op": "verdict",
               "outcome": "accept",
-              "reason": "'correct answer ' + str(msg.value) + ' received at ' + str(round(msg.time, 6)) + ' ns <= deadline ' + str(round(deadline, 6)) + ' ns'"
+              "reason": "'correct answer ' + str(msg.value) + ' received at ' + str(round(msg.time, 6)) + ' ns <= deadline ' + str(round(deadline_fs / 1e6, 6)) + ' ns'"
             }
           ]
         },
@@ -498,34 +500,45 @@
             {
               "op": "verdict",
               "outcome": "reject",
-              "reason": "'no answer by the deadline ' + str(round(deadline, 6)) + ' ns'"
+              "reason": "'no answer by the deadline ' + str(round(deadline_fs / 1e6, 6)) + ' ns'"
             }
           ]
         }
-      ]
+      ],
+      "port_kinds": {
+        "prover": [
+          "quantum",
+          "classical"
+        ]
+      }
     },
-    "qpv_bb84_verifier_classical": {
-      "name": "qpv_bb84_verifier_classical",
+    "qpv_verifier_classical": {
+      "name": "qpv_verifier_classical",
       "role": "verifier",
-      "description": "QPV_BB84 verifier that sends the basis bit theta classically. Accepts iff the answer equals x and arrives by the deadline t_ref + d(V, claim)/c + tolerance (local clock).",
+      "description": "Classical verifier: sends its share of the basis. Times its signal to reach the claimed position at t_ref and accepts iff the answer equals x and arrives by t_ref + d(V, claim)/c + tolerance (local clock, integer fs).",
       "ports": [
         "prover"
       ],
       "params": {
         "t_ref_ns": {
           "default": 20.0,
-          "description": "Agreed time at which both challenges reach the claimed position."
+          "description": "Agreed time at which all challenges reach the claimed position."
         },
         "tolerance_ns": {
           "default": 0.5,
           "description": "Allowed processing time of the prover (deadline slack)."
+        },
+        "share_index": {
+          "default": 0,
+          "description": "Which of the shared basis shares this verifier sends."
         }
       },
       "variables": {
         "x": 0,
-        "theta": 0,
-        "send_at": 0.0,
-        "deadline": 0.0,
+        "shares": [
+          0
+        ],
+        "deadline_fs": 0,
         "sent_at": 0.0
       },
       "initial": "idle",
@@ -546,8 +559,7 @@
           "ui": {
             "x": 0,
             "y": 140
-          },
-          "description": "Waiting for the emission instant."
+          }
         },
         {
           "id": "waiting",
@@ -561,22 +573,22 @@
         {
           "id": "accepted",
           "kind": "terminal",
-          "outcome": "accept",
           "label": "Accept",
           "ui": {
             "x": -300,
             "y": 470
-          }
+          },
+          "outcome": "accept"
         },
         {
           "id": "rejected",
           "kind": "terminal",
-          "outcome": "reject",
           "label": "Reject",
           "ui": {
             "x": 300,
             "y": 470
-          }
+          },
+          "outcome": "reject"
         }
       ],
       "transitions": [
@@ -592,18 +604,13 @@
           "actions": [
             {
               "op": "set",
-              "var": "send_at",
-              "expr": "fs_round(t_ref_ns - claim_travel_ns)"
-            },
-            {
-              "op": "set",
-              "var": "deadline",
-              "expr": "fs_round(t_ref_ns + claim_travel_ns + tolerance_ns)"
+              "var": "deadline_fs",
+              "expr": "fs(t_ref_ns) + claim_travel_fs + fs(tolerance_ns)"
             },
             {
               "op": "timer",
               "name": "emit",
-              "at_ns": "send_at"
+              "at_fs": "fs(t_ref_ns) - claim_travel_fs"
             }
           ]
         },
@@ -622,7 +629,7 @@
               "op": "send",
               "port": "prover",
               "tag": "theta",
-              "value": "theta"
+              "value": "shares[share_index]"
             },
             {
               "op": "set",
@@ -637,12 +644,12 @@
             {
               "op": "record",
               "key": "deadline_ns",
-              "value": "deadline"
+              "value": "deadline_fs / 1e6"
             },
             {
               "op": "timer",
               "name": "deadline",
-              "at_ns": "deadline"
+              "at_fs": "deadline_fs"
             }
           ]
         },
@@ -657,7 +664,7 @@
             ],
             "port": "prover"
           },
-          "guard": "msg.value == x and msg.time <= deadline",
+          "guard": "msg.value == x and msg.time_fs <= deadline_fs",
           "label": "correct & on time",
           "duration_ns": 0,
           "actions": [
@@ -678,7 +685,7 @@
             {
               "op": "verdict",
               "outcome": "accept",
-              "reason": "'correct answer ' + str(msg.value) + ' received at ' + str(round(msg.time, 6)) + ' ns <= deadline ' + str(round(deadline, 6)) + ' ns'"
+              "reason": "'correct answer ' + str(msg.value) + ' received at ' + str(round(msg.time, 6)) + ' ns <= deadline ' + str(round(deadline_fs / 1e6, 6)) + ' ns'"
             }
           ]
         },
@@ -731,40 +738,50 @@
             {
               "op": "verdict",
               "outcome": "reject",
-              "reason": "'no answer by the deadline ' + str(round(deadline, 6)) + ' ns'"
+              "reason": "'no answer by the deadline ' + str(round(deadline_fs / 1e6, 6)) + ' ns'"
             }
           ]
         }
-      ]
+      ],
+      "port_kinds": {
+        "prover": [
+          "classical"
+        ]
+      }
     },
-    "qpv_bb84_adv_teleport_sender": {
-      "name": "qpv_bb84_adv_teleport_sender",
+    "qpv_adv_chain0_2v": {
+      "name": "qpv_adv_chain0_2v",
       "role": "adversary",
-      "description": "Teleportation attack, adversary near the qubit-sending verifier: Bell-measures the intercepted qubit with its EPR half 'e' (teleporting it to the partner), sends both outcomes, and corrects the partner's result once (theta, m) arrives. x = m XOR (b1 if theta == 0 else b0).",
+      "description": "Teleportation-chain attacker 0 of 1: teleports the intercepted qubit into the chain; after one round of broadcast it decodes x from the Pauli frame and answers its verifier.",
       "ports": [
         "verifier",
-        "partner"
+        "p1"
       ],
       "params": {},
       "variables": {
+        "s": 0,
         "b0": 0,
-        "b1": 0
+        "b1": 0,
+        "m": 0,
+        "fx": 0,
+        "fz": 0,
+        "t": 0
       },
       "initial": "intercept",
       "states": [
         {
           "id": "intercept",
           "kind": "initial",
-          "label": "Intercept qubit",
+          "label": "Intercept challenge",
           "ui": {
             "x": 0,
             "y": 0
           }
         },
         {
-          "id": "teleported",
+          "id": "relayed",
           "kind": "normal",
-          "label": "Await (theta, m)",
+          "label": "Await partners",
           "ui": {
             "x": 0,
             "y": 130
@@ -773,19 +790,20 @@
         {
           "id": "done",
           "kind": "terminal",
-          "outcome": "done",
           "label": "Answered",
           "ui": {
             "x": 0,
             "y": 260
-          }
+          },
+          "outcome": "done"
         }
       ],
       "transitions": [
         {
           "id": "teleport",
           "from": "intercept",
-          "to": "teleported",
+          "to": "relayed",
+          "label": "teleport",
           "trigger": {
             "type": "receive",
             "tags": [
@@ -793,13 +811,12 @@
             ],
             "port": "verifier"
           },
-          "label": "Bell measurement",
           "actions": [
             {
               "op": "bell_measure",
               "qubits": [
                 "q",
-                "e"
+                "out"
               ],
               "results": [
                 "b0",
@@ -808,63 +825,102 @@
             },
             {
               "op": "send",
-              "port": "partner",
-              "tag": "corr",
+              "port": "p1",
+              "tag": "e0",
               "value": "[b0, b1]"
             }
           ]
         },
         {
-          "id": "answer",
-          "from": "teleported",
+          "id": "decode",
+          "from": "relayed",
           "to": "done",
+          "label": "decode & answer",
           "trigger": {
             "type": "receive",
             "tags": [
-              "tm"
-            ],
-            "port": "partner"
+              "e1"
+            ]
           },
-          "label": "correct & answer",
           "actions": [
+            {
+              "op": "set",
+              "var": "fx",
+              "expr": "0"
+            },
+            {
+              "op": "set",
+              "var": "fz",
+              "expr": "0"
+            },
+            {
+              "op": "set",
+              "var": "fx",
+              "expr": "fx ^ b1"
+            },
+            {
+              "op": "set",
+              "var": "fz",
+              "expr": "fz ^ b0"
+            },
+            {
+              "op": "set",
+              "var": "t",
+              "expr": "fx"
+            },
+            {
+              "op": "set",
+              "var": "fx",
+              "expr": "fz if msgs.e1.value[0] else fx"
+            },
+            {
+              "op": "set",
+              "var": "fz",
+              "expr": "t if msgs.e1.value[0] else fz"
+            },
             {
               "op": "send",
               "port": "verifier",
               "tag": "answer",
-              "value": "msg.value[1] ^ (b1 if msg.value[0] == 0 else b0)"
+              "value": "msgs.e1.value[1] ^ fx"
             }
           ]
         }
       ]
     },
-    "qpv_bb84_adv_teleport_receiver": {
-      "name": "qpv_bb84_adv_teleport_receiver",
+    "qpv_adv_chain1_2v": {
+      "name": "qpv_adv_chain1_2v",
       "role": "adversary",
-      "description": "Teleportation attack, adversary near the classical verifier: on theta, measures its EPR half 'e' in basis theta, sends (theta, m) to its partner, and corrects with the partner's Bell outcomes.",
+      "description": "Teleportation-chain attacker 1 of 1: measures its EPR half in basis share; after one round of broadcast it decodes x from the Pauli frame and answers its verifier.",
       "ports": [
         "verifier",
-        "partner"
+        "p0"
       ],
       "params": {},
       "variables": {
-        "th": 0,
-        "m": 0
+        "s": 0,
+        "b0": 0,
+        "b1": 0,
+        "m": 0,
+        "fx": 0,
+        "fz": 0,
+        "t": 0
       },
       "initial": "intercept",
       "states": [
         {
           "id": "intercept",
           "kind": "initial",
-          "label": "Intercept theta",
+          "label": "Intercept challenge",
           "ui": {
             "x": 0,
             "y": 0
           }
         },
         {
-          "id": "measured",
+          "id": "relayed",
           "kind": "normal",
-          "label": "Await corrections",
+          "label": "Await partners",
           "ui": {
             "x": 0,
             "y": 130
@@ -873,19 +929,20 @@
         {
           "id": "done",
           "kind": "terminal",
-          "outcome": "done",
           "label": "Answered",
           "ui": {
             "x": 0,
             "y": 260
-          }
+          },
+          "outcome": "done"
         }
       ],
       "transitions": [
         {
           "id": "measure",
           "from": "intercept",
-          "to": "measured",
+          "to": "relayed",
+          "label": "measure",
           "trigger": {
             "type": "receive",
             "tags": [
@@ -893,45 +950,78 @@
             ],
             "port": "verifier"
           },
-          "label": "measure EPR half",
           "actions": [
             {
               "op": "set",
-              "var": "th",
+              "var": "s",
               "expr": "msg.value"
             },
             {
               "op": "measure",
-              "qubit": "e",
-              "basis": "th",
+              "qubit": "in",
+              "basis": "s",
               "result": "m"
             },
             {
               "op": "send",
-              "port": "partner",
-              "tag": "tm",
-              "value": "[th, m]"
+              "port": "p0",
+              "tag": "e1",
+              "value": "[s, m]"
             }
           ]
         },
         {
-          "id": "answer",
-          "from": "measured",
+          "id": "decode",
+          "from": "relayed",
           "to": "done",
+          "label": "decode & answer",
           "trigger": {
             "type": "receive",
             "tags": [
-              "corr"
-            ],
-            "port": "partner"
+              "e0"
+            ]
           },
-          "label": "correct & answer",
           "actions": [
+            {
+              "op": "set",
+              "var": "fx",
+              "expr": "0"
+            },
+            {
+              "op": "set",
+              "var": "fz",
+              "expr": "0"
+            },
+            {
+              "op": "set",
+              "var": "fx",
+              "expr": "fx ^ msgs.e0.value[1]"
+            },
+            {
+              "op": "set",
+              "var": "fz",
+              "expr": "fz ^ msgs.e0.value[0]"
+            },
+            {
+              "op": "set",
+              "var": "t",
+              "expr": "fx"
+            },
+            {
+              "op": "set",
+              "var": "fx",
+              "expr": "fz if s else fx"
+            },
+            {
+              "op": "set",
+              "var": "fz",
+              "expr": "t if s else fz"
+            },
             {
               "op": "send",
               "port": "verifier",
               "tag": "answer",
-              "value": "m ^ (msg.value[1] if th == 0 else msg.value[0])"
+              "value": "m ^ fx"
             }
           ]
         }

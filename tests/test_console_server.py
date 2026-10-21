@@ -66,8 +66,8 @@ def test_console_strategy_swap_and_completion():
     con = Console(Session(example("qpv_bb84_collusion_unentangled")))
     assert "strategy" in con.complete("str")
     assert "E0" in con.complete("node E")
-    r = con.execute("strategy E0 qpv_bb84_adv_guess")
-    assert r.ok and con.session.project["participants"][2]["automaton"] == "qpv_bb84_adv_guess"
+    r = con.execute("strategy E0 qpv_adv_guess")
+    assert r.ok and con.session.project["participants"][2]["automaton"] == "qpv_adv_guess"
 
 
 def test_console_export(tmp_path):
@@ -178,7 +178,7 @@ def test_api_console_and_meta(client):
     assert not r["result"]["ok"]
     meta = client.get("/api/meta").json()
     assert "density_matrix" in meta["backends"] and "no_entanglement" in meta["profiles"]
-    assert "qpv_bb84_adv_teleport_sender" in meta["automata"]
+    assert "qpv_adv_chain0_2v" in meta["automata"]
 
 
 def test_api_experiment_job(client):

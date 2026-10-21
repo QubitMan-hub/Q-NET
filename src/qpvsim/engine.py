@@ -520,6 +520,10 @@ class Simulation:
         ctx["speed_m_per_ns"] = self.speed_mps / 1e9
         recs = {m.tag: self._msg_record(node, m) for m in msgs}
         ctx["msgs"] = Record(recs)
+        received: Dict[str, List[Any]] = {}  # every consumed value per tag (several messages may share one)
+        for m in msgs:
+            received.setdefault(m.tag, []).append(self._msg_record(node, m)["value"])
+        ctx["received"] = Record(received)
         ctx["msg"] = self._msg_record(node, msgs[0]) if msgs else None
         return ctx
 

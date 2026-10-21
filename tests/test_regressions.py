@@ -8,7 +8,7 @@ from qpvsim.webapi import WebAPI
 
 
 def _prover_actions(doc, actions):
-    doc["automata"]["qpv_bb84_honest_prover"]["transitions"][0]["actions"] = actions
+    doc["automata"]["qpv_prover_2v"]["transitions"][0]["actions"] = actions
     return doc
 
 

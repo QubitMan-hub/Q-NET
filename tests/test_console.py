@@ -89,8 +89,8 @@ def test_build_a_scenario_from_the_console():
 def test_strategy_lists_alternatives_and_strategies_filters_by_role():
     c = con()
     assert "cpv_prover" in ok(c, "strategy P").data["alternatives"]
-    assert set(ok(c, "strategies verifier").data) == {"cpv_verifier", "qpv_bb84_verifier_quantum",
-                                                      "qpv_bb84_verifier_classical"}
+    assert set(ok(c, "strategies verifier").data) == {"cpv_verifier", "qpv_verifier_quantum",
+                                                      "qpv_verifier_classical"}
 
 
 def test_repeat_varies_several_settings_with_shorthand_paths():

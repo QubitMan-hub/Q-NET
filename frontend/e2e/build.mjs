@@ -61,12 +61,12 @@ await selectNode("V2");
 await page.locator('[data-testid="inspector"] input[aria-label="x position"]').fill("3");
 await page.locator('[data-testid="inspector"] input[aria-label="x position"]').press("Enter");
 await settle();
-await page.locator('[data-testid="inspector"] .field:has(> label:text-is("Automaton")) select').selectOption("qpv_bb84_verifier_classical");
+await page.locator('[data-testid="inspector"] .field:has(> label:text-is("Automaton")) select').selectOption("qpv_verifier_classical");
 await settle();
 await selectNode("P");
 await setField("Processing (ns)", 0.2);
 
-// --- wire ports: quantum V.prover-P.left, classical V.prover-P.left, classical V2.prover-P.right
+// --- wire ports: quantum V.prover-P.v0, classical V.prover-P.v0, classical V2.prover-P.v1
 async function connect(a, ap, b, bp) {
   const h1 = page.locator(`[data-testid="node-${a}"] .react-flow__handle[data-handleid="${ap}"]`);
   const h2 = page.locator(`[data-testid="node-${b}"] .react-flow__handle[data-handleid="${bp}"]`);
@@ -78,10 +78,10 @@ async function connect(a, ap, b, bp) {
   await page.mouse.up();
   await settle();
 }
-await connect("V", "prover", "P", "left");
+await connect("V", "prover", "P", "v0");
 await page.click('.palette-item:has-text("Classical channel")');
-await connect("V", "prover", "P", "left");
-await connect("V2", "prover", "P", "right");
+await connect("V", "prover", "P", "v0");
+await connect("V2", "prover", "P", "v1");
 proj = (await api("/api/project")).project;
 check(proj.links.length === 3 && proj.links.filter((l) => l.kind === "quantum").length === 1,
   `three links created by connecting ports (${proj.links.map((l) => `${l.id}:${l.kind}`)})`);
@@ -93,7 +93,7 @@ await settle();
 await page.click('.section button:has-text("rand0")');
 await page.waitForTimeout(150);
 const ta = page.locator('[data-testid="inspector"] textarea');
-await ta.fill(JSON.stringify({ id: "rand0", type: "shared_random", holders: ["V", "V2"], vars: { x: "rand_bit()", theta: "rand_bit()" } }));
+await ta.fill(JSON.stringify({ id: "rand0", type: "shared_random", holders: ["V", "V2"], vars: { x: "rand_bit()", shares: "[rand_bit()]" } }));
 await ta.evaluate((el) => el.blur());
 await settle();
 await page.keyboard.press("Escape");

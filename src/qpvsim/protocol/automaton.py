@@ -70,7 +70,7 @@ ACTIONS: Dict[str, Dict[str, Any]] = {
 }
 
 BUILTIN_NAMES = {"msg", "msgs", "now", "now_fs", "pos", "claim_pos", "claim_travel_ns", "claim_travel_fs",
-                 "node_id", "role", "speed_m_per_ns"}
+                 "node_id", "role", "speed_m_per_ns", "received"}
 TIMER_FIELDS = ("after_ns", "at_ns", "after_fs", "at_fs")
 
 

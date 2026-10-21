@@ -87,8 +87,8 @@ def test_displaced_prover_rejected_by_far_verifier():
 
 def test_wrong_answer_classified():
     doc = normalize(example("qpv_bb84_honest"))
-    doc["automata"]["qpv_bb84_honest_prover"]["transitions"][0]["actions"][1]["value"] = "1 - answer"
-    doc["automata"]["qpv_bb84_honest_prover"]["transitions"][0]["actions"][2]["value"] = "1 - answer"
+    doc["automata"]["qpv_prover_2v"]["transitions"][0]["actions"][1]["value"] = "1 - answer"
+    doc["automata"]["qpv_prover_2v"]["transitions"][0]["actions"][2]["value"] = "1 - answer"
     sim = run(doc)
     assert {v["category"] for v in sim.snapshot()["decision"]["verifiers"]} == {"wrong_answer"}
 
@@ -186,7 +186,7 @@ def test_max_qubits_refuses_incoming_qubit():
 def test_participants_cannot_read_other_participants_state():
     """Expressions see only local variables: E1 cannot reference the verifiers' secret x."""
     doc = normalize(example("qpv_bb84_collusion_unentangled"))
-    a = doc["automata"]["qpv_bb84_adv_forward_basis"]
+    a = doc["automata"]["qpv_adv_unentangled_c"]
     a["transitions"][1]["actions"][0]["value"] = "x"
     from qpvsim import validate_project
     assert any("unknown name 'x'" in i.message for i in validate_project(doc))
