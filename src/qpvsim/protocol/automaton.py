@@ -58,7 +58,7 @@ ACTIONS: Dict[str, Dict[str, Any]] = {
     "bell_measure": {"required": ["qubits", "results"], "exprs": [],
                      "doc": "Bell-state measurement (CNOT, H, Z-measure both)."},
     "discard": {"required": ["qubit"], "exprs": [], "doc": "Discard a qubit (partial trace)."},
-    "timer": {"required": ["name"], "exprs": ["after_ns", "at_ns"],
+    "timer": {"required": ["name"], "exprs": ["after_ns", "at_ns", "after_fs", "at_fs"],
               "doc": "Arm a named timer after a delay or at an absolute local time."},
     "cancel_timer": {"required": ["name"], "exprs": [], "doc": "Cancel a named timer."},
     "verdict": {"required": ["outcome"], "exprs": ["reason"],
@@ -68,8 +68,9 @@ ACTIONS: Dict[str, Dict[str, Any]] = {
     "log": {"required": ["text"], "exprs": ["text"], "doc": "Append a message to the trace."},
 }
 
-BUILTIN_NAMES = {"msg", "msgs", "now", "pos", "claim_pos", "claim_travel_ns", "node_id",
-                 "role", "speed_m_per_ns"}
+BUILTIN_NAMES = {"msg", "msgs", "now", "now_fs", "pos", "claim_pos", "claim_travel_ns", "claim_travel_fs",
+                 "node_id", "role", "speed_m_per_ns"}
+TIMER_FIELDS = ("after_ns", "at_ns", "after_fs", "at_fs")
 
 
 @dataclass
@@ -264,8 +265,8 @@ def validate_automaton(name: str, spec: Dict[str, Any], base: str = "") -> List[
                 if msg:
                     err(f"{ap}.{fld}", msg)
             if op == "timer":
-                if ("after_ns" in a) == ("at_ns" in a):
-                    err(ap, "timer needs exactly one of after_ns / at_ns")
+                if sum(f in a for f in TIMER_FIELDS) != 1:
+                    err(ap, f"timer needs exactly one of {' / '.join(TIMER_FIELDS)}")
                 timers_set.add(a.get("name"))
             if op in ("send", "send_qubit") and ports and a.get("port") not in ports:
                 warn(f"{ap}.port", f"port {a.get('port')!r} not declared in ports")

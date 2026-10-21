@@ -484,31 +484,37 @@ class Simulation:
             "rand_int": lambda lo, hi: int(rng.integers(int(lo), int(hi) + 1)),
             "rand_uniform": lambda: float(rng.random()),
             "rand_choice": lambda seq: seq[int(rng.integers(0, len(seq)))],
+            "rand_bits": lambda n: [int(rng.integers(0, 2)) for _ in range(int(n))],
         }
 
     def _functions(self, node: Node) -> Dict[str, Callable]:
         f = self._random_functions(node.rng)
         speed_m_per_ns = self.speed_mps / 1e9
         f["travel_ns"] = lambda d: float(d) / speed_m_per_ns
+        f["travel_fs"] = lambda d: tu.propagation_fs(float(d), self.speed_mps)
+        f["fs"] = tu.ns
         # snap a float-ns value onto the engine's femtosecond grid, so comparisons
         # with ``now``/``msg.time`` agree exactly with integer-fs timers
         f["fs_round"] = lambda x: tu.ns(x) / tu.NS
         return f
 
     def _msg_record(self, node: Node, m: Message) -> Record:
+        local = node.local(m.arrival_time)
         return Record(id=m.id, tag=m.tag, kind=m.kind, port=m.dst_port,
-                      value=(m.tag if m.kind == "quantum" else m.value),
-                      time=node.local(m.arrival_time) / tu.NS)
+                      value=(m.tag if m.kind == "quantum" else m.value), time=local / tu.NS, time_fs=local)
 
     def _context(self, node: Node, msgs: List[Message], t: int) -> Dict[str, Any]:
         ctx: Dict[str, Any] = {}
         ctx.update(node.params)
         ctx.update(node.vars)
-        ctx["now"] = node.local(t) / tu.NS
+        ctx["now_fs"] = node.local(t)
+        ctx["now"] = ctx["now_fs"] / tu.NS
         ctx["pos"] = list(node.position)
         ctx["claim_pos"] = list(self.claim_pos)
-        ctx["claim_travel_ns"] = math.dist(node.position, self.claim_pos) / (self.speed_mps / 1e9) \
-            if len(node.position) == len(self.claim_pos) else float("nan")
+        same_dim = len(node.position) == len(self.claim_pos)
+        dist = math.dist(node.position, self.claim_pos) if same_dim else float("nan")
+        ctx["claim_travel_ns"] = dist / (self.speed_mps / 1e9)
+        ctx["claim_travel_fs"] = tu.propagation_fs(dist, self.speed_mps) if same_dim else None
         ctx["node_id"] = node.id
         ctx["role"] = node.role
         ctx["speed_m_per_ns"] = self.speed_mps / 1e9
@@ -915,14 +921,18 @@ class Simulation:
             out.update(qubit=slot)
         elif op == "timer":
             name = a["name"]
-            if "after_ns" in a:
-                val = ev("after_ns")
-                target_local = node.local(t) + tu.ns(repr(float(val)) if isinstance(val, float) else val)
-                how = f"armed at {tu.fmt(t)} with after_ns `{a['after_ns']}` = {val} ns (local clock)"
+            field_ = next(f for f in ("after_ns", "at_ns", "after_fs", "at_fs") if f in a)
+            val = ev(field_)
+            if field_.endswith("_fs"):
+                if not isinstance(val, int) or isinstance(val, bool):
+                    raise ProtocolError(f"{field_} must be an integer number of fs, got {val!r}")
+                amount, unit = val, "fs"
             else:
-                val = ev("at_ns")
-                target_local = tu.ns(repr(float(val)) if isinstance(val, float) else val)
-                how = f"armed at {tu.fmt(t)} for absolute local time `{a['at_ns']}` = {val} ns"
+                amount, unit = tu.ns(repr(float(val)) if isinstance(val, float) else val), "ns"
+            relative = field_.startswith("after")
+            target_local = (node.local(t) if relative else 0) + amount
+            how = (f"armed at {tu.fmt(t)} with after_{unit} `{a[field_]}` = {val} {unit} (local clock)" if relative
+                   else f"armed at {tu.fmt(t)} for absolute local time `{a[field_]}` = {val} {unit}")
             fire = node.clock.to_global(target_local)
             if fire < t:
                 how += "; target already passed, fires immediately"

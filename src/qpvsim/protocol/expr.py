@@ -14,7 +14,8 @@ interpreted by a whitelist walker (never ``eval``):
 
 Randomness functions draw from the participant's own seeded RNG stream, so
 expressions are reproducible.  Time values in expressions are float
-nanoseconds of the participant's *local* clock.
+nanoseconds of the participant's *local* clock; ``now_fs``, ``msg.time_fs``,
+``claim_travel_fs`` and ``fs()``/``travel_fs()`` give exact integer femtoseconds.
 """
 
 from __future__ import annotations
@@ -50,6 +51,22 @@ def _xor(*bits):
     return r
 
 
+def _bits(shares):
+    for s in shares:
+        yield from (s if isinstance(s, (list, tuple)) else [s])
+
+
+def _combine(name, shares):
+    """Basis bit from the classical verifiers' shares (QPV_BB84^f, see qpvsim.qpv.automata)."""
+    if name == "xor":
+        return _xor(*_bits(shares))
+    if name == "inner_product":  # generalised inner product: sum_j prod_i s_i[j] mod 2
+        if len({len(s) for s in shares}) != 1:
+            raise ValueError("inner_product needs shares of equal length")
+        return sum(all(int(s[j]) for s in shares) for j in range(len(shares[0]))) % 2
+    raise ValueError(f"unknown combine function {name!r} (xor | inner_product)")
+
+
 def _distance(p, q):
     return math.dist(tuple(float(x) for x in p), tuple(float(x) for x in q))
 
@@ -60,7 +77,7 @@ PURE_FUNCTIONS: Dict[str, Callable[..., Any]] = {
     "round": round, "len": len, "sum": sum, "str": str,
     "sqrt": math.sqrt, "cos": math.cos, "sin": math.sin, "exp": math.exp, "log": math.log,
     "floor": math.floor, "ceil": math.ceil,
-    "xor": _xor, "distance": _distance,
+    "xor": _xor, "distance": _distance, "combine": _combine,
 }
 
 # functions bound by the engine to the participant's context (see engine._functions)
@@ -69,7 +86,10 @@ ENGINE_FUNCTIONS = {
     "rand_int": "rand_int(lo, hi): uniform integer in [lo, hi]",
     "rand_uniform": "uniform float in [0, 1)",
     "rand_choice": "rand_choice(list): uniform element",
+    "rand_bits": "rand_bits(n): list of n uniform random bits",
     "travel_ns": "travel_ns(distance_m): light-cone delay at the project signal speed",
+    "travel_fs": "travel_fs(distance_m): the same delay in integer fs, rounded up like links",
+    "fs": "fs(x_ns): a time in ns as integer femtoseconds",
     "fs_round": "fs_round(x_ns): snap a time in ns to the engine's femtosecond grid",
 }
 
