@@ -92,8 +92,6 @@ def normalize(doc: Dict[str, Any]) -> Dict[str, Any]:
     doc.setdefault("verification", {"rule": "all", "verifiers": None})
     doc.setdefault("experiments", [])
     for p in doc["participants"]:
-        if p.get("role") == "verifier" and "verifier_type" not in p:
-            p["verifier_type"] = verifier_type(doc, p)
         p.setdefault("role", "other")
         p.setdefault("label", p.get("id"))
         p.setdefault("params", {})

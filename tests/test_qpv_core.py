@@ -6,6 +6,7 @@ from qpvsim import Simulation, example, normalize, validate_project
 from qpvsim import timeunits as tu
 from qpvsim.protocol.automaton import validate_automaton
 from qpvsim.protocol.expr import ExprError, evaluate
+from qpvsim.protocol.project import verifier_type
 from qpvsim.qpv.geometry import affine_rank, dimension, in_hull
 
 C = tu.SPEED_OF_LIGHT_MPS
@@ -136,7 +137,7 @@ def test_unconnected_required_port_warns():
 
 def test_verifier_type_inferred_for_old_projects():
     doc = normalize(example("qpv_bb84_honest"))
-    types = {p["id"]: p.get("verifier_type") for p in doc["participants"]}
-    assert types == {"V0": "quantum", "V1": "classical", "P": None}
+    types = {p["id"]: verifier_type(doc, p) for p in doc["participants"] if p["role"] == "verifier"}
+    assert types == {"V0": "quantum", "V1": "classical"}
     doc["participants"][0]["verifier_type"] = "photonic"
     assert any(i.path == "participants[V0].verifier_type" for i in validate_project(doc))
