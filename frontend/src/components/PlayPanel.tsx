@@ -40,6 +40,8 @@ export function PlayPanel({ onDetails }: { onDetails: () => void }) {
   const sim = useStore((s) => s.sim);
   const revision = useStore((s) => s.revision);
   const setToast = useStore((s) => s.setToast);
+  const showAttacks = useStore((s) => s.showAttacks);
+  const toggleAttacks = useStore((s) => s.toggleAttacks);
   const [busy, setBusy] = useState(false);
   const [scoreRev, setScoreRev] = useState(-1);
   const { job, start } = useExperimentJob();
@@ -86,12 +88,14 @@ export function PlayPanel({ onDetails }: { onDetails: () => void }) {
 
       <h3><span className="play-step">2</span>Who stands at the spot?</h3>
       <div className="play-who" role="radiogroup" aria-label="Who answers">
-        {Object.entries(WHO).map(([k, [name, desc]]) => (
+        {Object.entries(WHO).filter(([k]) => showAttacks || !cheating(k) || k === who).map(([k, [name, desc]]) => (
           <button key={k} role="radio" aria-checked={who === k} className={`play-card ${cheating(k) ? "cheat" : "true"}${who === k ? " on" : ""}`}
             disabled={busy} onClick={() => pickWho(k)} data-testid={`play-who-${k}`}>
             <b>{name}</b><span>{desc}</span>
           </button>
         ))}
+        <button className="btn ghost" onClick={toggleAttacks} aria-pressed={showAttacks} data-testid="toggle-attacks">
+          {showAttacks ? "Hide attack examples" : "Show attack examples"}</button>
       </div>
 
       <h3><span className="play-step">3</span>Play</h3>

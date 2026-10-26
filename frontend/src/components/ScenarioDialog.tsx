@@ -107,6 +107,9 @@ export function ScenarioDialog({ onClose }: { onClose: () => void }) {
 /** First-visit guide: ready-made 1D, 2D and 3D scenarios, or build your own. */
 export function StartScreen({ onClose, onBuild }: { onClose: () => void; onBuild: () => void }) {
   const ready = useStore((s) => s.scenarios?.ready ?? []);
+  const showAttacks = useStore((s) => s.showAttacks);
+  const toggleAttacks = useStore((s) => s.toggleAttacks);
+  const columns = showAttacks ? COLUMNS : COLUMNS.slice(0, 1);
   const open = async (id: string) => { onClose(); await buildAndRun({ id }); };
   return (
     <div className="welcome start" role="dialog" aria-labelledby="welcome-title" data-testid="start-screen">
@@ -114,12 +117,12 @@ export function StartScreen({ onClose, onBuild }: { onClose: () => void; onBuild
       <p>Verifiers send a qubit and the pieces of its basis so they meet only at the claimed position; whoever answers there in time,
         and correctly, is accepted. Pick a setup to run it now{IN_BROWSER ? " in your browser" : ""}.</p>
       <table className="start-grid">
-        <thead><tr><th />{COLUMNS.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead>
+        <thead><tr><th />{columns.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead>
         <tbody>
           {DIMS.map((d) => (
             <tr key={d}>
               <th>{d}D <span className="muted">{d === 1 ? "2 verifiers" : `${d + 1} verifiers`}</span></th>
-              {COLUMNS.map(([who]) => {
+              {columns.map(([who]) => {
                 const r = ready.find((x) => x.id === `${d}d_${who}`);
                 return <td key={who}>{r && <button className="btn" onClick={() => open(r.id)} data-testid={`start-${r.id}`}>Run</button>}</td>;
               })}
@@ -127,8 +130,12 @@ export function StartScreen({ onClose, onBuild }: { onClose: () => void; onBuild
           ))}
         </tbody>
       </table>
-      <p className="welcome-note">The honest prover is always accepted; the unentangled attack wins about 85% of rounds (cos²(π/8)); the
-        teleportation attack, with entanglement, always wins. Results describe the model, not a security proof.</p>
+      <label className="row small" style={{ marginBottom: 8 }}>
+        <input type="checkbox" checked={showAttacks} onChange={toggleAttacks} data-testid="show-attacks" />
+        Show attack examples (unentangled and entangled attackers)
+      </label>
+      <p className="welcome-note">The honest prover is always accepted.{showAttacks && <> The unentangled attack wins about 85% of rounds (cos²(π/8));
+        the teleportation attack, with entanglement, always wins.</>} Results describe the model, not a security proof.</p>
       <div className="row">
         <button className="btn" onClick={() => { onClose(); onBuild(); }}>Build your own…</button>
         <span className="grow" />

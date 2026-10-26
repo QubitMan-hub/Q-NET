@@ -4,6 +4,7 @@ import { api, IN_BROWSER, type ProjectResponse } from "./api";
 // Per-browser conveniences only (the engine state lives in the engine). Every
 // storage access is guarded: private windows and blocked storage must still work.
 const SAVED_KEY = "qpv.project.v1";
+const ATTACKS_KEY = "qpv.attacks.shown";
 export function storageGet(key: string): string | null {
   try { return window.localStorage.getItem(key); } catch { return null; }
 }
@@ -53,6 +54,7 @@ interface Store {
   consoleLog: ConsoleEntry[];
   highlightChain: number[];
   theme: "light" | "dark";
+  showAttacks: boolean; // attack examples are hidden until the user asks for them
 
   init(): Promise<void>;
   edit(fn: (p: Project) => void, opts?: { select?: Selection }): void;
@@ -76,6 +78,7 @@ interface Store {
   setPlayRate(r: number): void;
   setHighlightChain(ids: number[]): void;
   toggleTheme(): void;
+  toggleAttacks(): void;
   refreshSim(full?: boolean): Promise<void>;
   loadScenario(body: Record<string, any>): Promise<void>;
   switchAttack(attack: string, policy?: string): Promise<void>;
@@ -153,6 +156,7 @@ export const useStore = create<Store>((set, get) => {
     selection: { kind: "project" }, view: "network", focus: null, dock: "events",
     past: [], future: [], playing: false, playRate: 4, busy: false, dirtyPush: false, toast: null,
     linkKind: "quantum", consoleLog: [], highlightChain: [], theme: "light",
+    showAttacks: storageGet(ATTACKS_KEY) === "1",
 
     async init() {
       await guard(async () => {
@@ -376,6 +380,12 @@ export const useStore = create<Store>((set, get) => {
     setLinkKind(k) { set({ linkKind: k }); },
     setPlayRate(r) { set({ playRate: r }); },
     setHighlightChain(ids) { set({ highlightChain: ids }); },
+    toggleAttacks() {
+      const on = !get().showAttacks;
+      storageSet(ATTACKS_KEY, on ? "1" : null);
+      set({ showAttacks: on });
+    },
+
     toggleTheme() {
       const t = get().theme === "light" ? "dark" : "light";
       document.documentElement.dataset.theme = t;

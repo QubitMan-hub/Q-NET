@@ -25,7 +25,7 @@ page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") 
 page.on("requestfailed", (r) => note(area, `request failed ${r.url().slice(0, 100)} ${r.failure()?.errorText}`));
 page.on("response", (r) => { if (r.status() >= 400) note(area, `HTTP ${r.status()} ${r.url().slice(0, 100)}`); });
 
-await page.addInitScript(() => { try { localStorage.setItem("qpv.expert", "1"); } catch {} });  // expert tools on
+await page.addInitScript(() => { try { localStorage.setItem("qpv.expert", "1"); localStorage.setItem("qpv.attacks.shown", "1"); } catch {} });  // expert tools on
 const t0 = Date.now();
 await page.goto(URL_);
 await page.waitForSelector('[data-testid="node-V0"]', { timeout: 240000 });

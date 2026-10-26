@@ -28,7 +28,7 @@ const launchOpts = { headless: true };
 try { require("node:fs").accessSync("/opt/pw-browsers/chromium"); } catch { /* default */ }
 const browser = await chromium.launch(launchOpts).catch(() => chromium.launch({ ...launchOpts, executablePath: "/opt/pw-browsers/chromium" }));
 const page = await browser.newPage({ viewport: { width: 1600, height: 960 } });
-await page.addInitScript(() => { try { localStorage.setItem("qpv.welcome.dismissed", "1"); localStorage.setItem("qpv.expert", "1"); } catch {} });
+await page.addInitScript(() => { try { localStorage.setItem("qpv.welcome.dismissed", "1"); localStorage.setItem("qpv.expert", "1"); localStorage.setItem("qpv.attacks.shown", "1"); } catch {} });
 const consoleErrors = [];
 page.on("pageerror", (e) => consoleErrors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text()); });
@@ -198,6 +198,9 @@ await page.screenshot({ path: `${SHOTS}/10-3d-top.png` });
 await page.click('[data-testid="btn-expert"]');
 check(!(await page.$('[data-testid="btn-step"]')) && !(await page.$('[data-testid="dock-events"]')), "simple mode hides the expert tools");
 await page.click('[data-testid="tab-play"]');
+await page.click('[data-testid="toggle-attacks"]');
+check(!(await page.$('[data-testid="play-who-teleport"]')) && !!(await page.$('[data-testid="play-who-honest"]')), "attack examples can be hidden");
+await page.click('[data-testid="toggle-attacks"]');
 await page.click('[data-testid="play-who-teleport"]');
 await page.waitForFunction(() => document.querySelector('[data-testid="play-who-teleport"]')?.getAttribute("aria-checked") === "true", null, { timeout: 30000 });
 await page.waitForFunction(() => document.querySelector('[data-testid="play-result"]')?.textContent?.startsWith("Fooled!"), null, { timeout: 30000 });
