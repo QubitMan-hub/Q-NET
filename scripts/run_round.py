@@ -42,8 +42,6 @@ def run_round(qv_pos, cv_pos, claim, prover_pos, t_ref_fs, tolerance_fs, rng=ran
 
 
 if __name__ == "__main__":
-    qv, cv, claim = [-3.0, 0.0], [3.0, 0.0], [0.0, 0.0]
-    print("--- honest prover at the claim")
-    run_round(qv, cv, claim, claim, tu.ns(20), tu.ns("0.5"))
-    print("--- prover 1 m off the claim")
-    run_round(qv, cv, claim, [-1.0, 0.0], tu.ns(20), tu.ns("0.5"))
+    claim = [0.0, 0.0]
+    run_round(qv_pos=[-3.0, 0.0], cv_pos=[3.0, 0.0], claim=claim, prover_pos=claim,
+              t_ref_fs=tu.ns(20), tolerance_fs=tu.ns("0.5"))
