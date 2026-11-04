@@ -174,10 +174,6 @@ def main(argv=None) -> int:
     return 0
 
 
-if __name__ == "__main__":
-    sys.exit(main())
-
-
 def _run_scenario(a) -> int:
     """Build a gallery scenario (or a recipe file), run it for many rounds and print what happened."""
     import json
@@ -209,3 +205,7 @@ def _run_scenario(a) -> int:
         dump_json(doc, a.save)
         print(f"Project written to {a.save}")
     return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
