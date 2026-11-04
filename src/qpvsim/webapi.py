@@ -28,7 +28,7 @@ from .protocol.automaton import ACTIONS, TRIGGER_TYPES, port_kinds
 from .protocol.capabilities import ROLE_PROFILES, profile_catalog
 from .protocol.expr import ENGINE_FUNCTIONS, PURE_FUNCTIONS
 from .protocol.project import normalize, participant, validate_project, verifier_ids, verifier_type
-from .qpv import lightcone, presets, scenario
+from .qpv import lightcone, presets, recipe, scenario
 from .qpv import timing as qtiming
 from .qpv.automata import COMBINES
 from .qpv.geometry import dimension
@@ -172,7 +172,8 @@ class WebAPI:
                         "default_tau_ns": lightcone.default_tau_ns(p)})
 
     def qpv_scenarios(self, **_) -> Result:
-        return self.ok({"ready": scenario.READY, "answerers": {a: scenario.LABELS[a] for a in scenario.ANSWERERS},
+        return self.ok({"ready": scenario.READY, "demos": recipe.demos(), "recipe": recipe.schema(),
+                        "answerers": {a: scenario.LABELS[a] for a in scenario.ANSWERERS},
                         "provers": scenario.PROVERS, "attacks": scenario.ATTACKS, "policies": scenario.POLICIES,
                         "combines": COMBINES, "presets": presets.PRESETS})
 
@@ -182,6 +183,14 @@ class WebAPI:
 
     def qpv_scenario(self, body=None, **_) -> Result:
         body = dict(body or {})
+        if "demo" in body:
+            try:
+                d = recipe.demo(str(body["demo"]))
+            except KeyError:
+                raise NotFound("no such demo scenario") from None
+            return self._install(recipe.compose({**d["recipe"], **{k: d[k] for k in ("id", "section", "title", "watch", "expect", "who") if k in d}}))
+        if "recipe" in body:
+            return self._install(recipe.compose(body["recipe"]))
         if "id" in body:
             body = next((r["args"] for r in scenario.READY if r["id"] == body["id"]), None)
             if body is None:
@@ -190,8 +199,9 @@ class WebAPI:
 
     def qpv_attack(self, body=None, **_) -> Result:
         body = body or {}
-        return self._install(scenario.switch_attack(self.session.project, body.get("attack", ""),
-                                                    body.get("policy", "breidbart")))
+        doc = scenario.switch_attack(self.session.project, body.get("attack", ""), body.get("policy", "breidbart"))
+        doc["meta"].pop("demo", None)  # a different answerer is no longer the demo it was
+        return self._install(doc)
 
     def qpv_autowire(self, **_) -> Result:
         return self._install(scenario.autowire(self.session.project))

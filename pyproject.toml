@@ -22,7 +22,7 @@ qpv = "qpvsim.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-qpvsim = ["examples/*.json", "server/static/**/*"]
+qpvsim = ["examples/*.json", "qpv/*.json", "server/static/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

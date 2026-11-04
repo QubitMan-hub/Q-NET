@@ -1,9 +1,9 @@
 import { useState } from "react";
-import type { Project } from "../types";
-import { useStore } from "../store";
+import type { Project, Recipe, RecipeField } from "../types";
+import { storageGet, storageSet, useStore } from "../store";
 import { IN_BROWSER } from "../api";
 import { GLOSSARY } from "../glossary";
-import { Field, NumberInput, Select } from "./ui";
+import { Advanced, Check, Field, Icon, NumberInput, Select, TextInput } from "./ui";
 
 /** An empty project for building a protocol from scratch in the editor. */
 function blankProject(): Project {
@@ -30,74 +30,149 @@ async function buildAndRun(body: Record<string, any>) {
   s.setDock("decision");
 }
 
-/** Build a complete QPV scenario in one step: dimension, verifiers, claim, prover or attack. */
-export function ScenarioDialog({ onClose }: { onClose: () => void }) {
-  const answerers = useStore((s) => s.scenarios?.answerers ?? {});
-  const policies = useStore((s) => s.scenarios?.policies ?? ["breidbart"]);
-  const [f, setF] = useState({ dim: 2, verifiers: 3, radius: 3, claim: [0, 0, 0], tolerance: 0.5, combine: "xor", who: "honest", policy: "breidbart" });
-  const set = (patch: Partial<typeof f>) => setF({ ...f, ...patch });
-  const minV = f.dim === 1 ? 2 : f.dim + 1;
-  const teleportBlocked = f.who === "teleport" && f.combine !== "xor";
-  const body = () => ({
-    dim: f.dim, verifiers: f.verifiers, radius_m: f.radius, claim: f.claim.slice(0, Math.max(2, f.dim)), tolerance_ns: f.tolerance,
-    combine: f.combine, policy: f.policy,
-    ...(["honest", "displaced"].includes(f.who) ? { prover: f.who } : { attack: f.who }),
-  });
-  const go = async (run: boolean) => {
-    onClose();
-    if (run) await buildAndRun(body()); else await useStore.getState().loadScenario(body());
+/** Saved recipes ("My scenarios"), kept in this browser. */
+const MY_KEY = "qpv.myRecipes";
+export function myRecipes(): Recipe[] {
+  try { return JSON.parse(storageGet(MY_KEY) ?? "[]"); } catch { return []; }
+}
+export function saveMyRecipes(list: Recipe[]) { storageSet(MY_KEY, JSON.stringify(list)); }
+
+const DEFAULT_RECIPE: Recipe = { base: { dim: 2, who: "honest" }, twists: [] };
+
+/** Participant ids a recipe will have, for the party pickers (verifiers, prover or attackers, added parties). */
+function parties(r: Recipe): string[] {
+  const dim = Number(r.base.dim ?? 2);
+  const n = r.base.verifiers ?? (dim === 1 ? 2 : dim + 1);
+  const ids = Array.from({ length: n }, (_, j) => `V${j}`);
+  ids.push(...(["honest", "displaced"].includes(r.base.who ?? "honest") ? ["P"] : Array.from({ length: n }, (_, j) => `E${j}`)));
+  let a = 0, m = 0;
+  for (const t of r.twists) {
+    if (t.type === "join") ids.push(t.id || `A${++a}`);
+    if (t.type === "intercept") ids.push(`M${++m}`);
+  }
+  return ids;
+}
+
+function FieldInput({ f, value, onChange, recipe, label }: {
+  f: RecipeField; value: any; onChange: (v: any) => void; recipe: Recipe; label: string;
+}) {
+  if (f.type === "bool") return <Check checked={!!value} onChange={onChange} label={label} />;
+  const v = value ?? f.default;
+  let input;
+  if (f.type === "choice") {
+    input = <Select value={String(v)} ariaLabel={label} options={(f.choices ?? []).map((c) => ({ value: String(c), label: String(c) }))}
+      onChange={(x) => onChange(typeof f.default === "number" ? Number(x) : x)} />;
+  } else if (f.type === "party" || f.type === "verifier") {
+    const ids = parties(recipe).filter((id) => f.type === "party" || id.startsWith("V"));
+    const opts = [...(f.allow_all ? ["all"] : []), ...ids, ...(ids.includes(v) || v === "all" ? [] : [v])];
+    input = <Select value={String(v)} ariaLabel={label} options={opts} onChange={onChange} />;
+  } else {
+    input = <NumberInput value={v === null || v === undefined ? null : Number(v)} allowNull={f.default === null}
+      step={0.1} ariaLabel={label} onCommit={onChange} />;
+  }
+  return <Field label={label}>{input}</Field>;
+}
+
+/** Compose any scenario: a base QPV setup plus twists, all described by the engine's recipe schema. */
+export function ScenarioDialog({ onClose, initial }: { onClose: () => void; initial?: Recipe | null }) {
+  const schema = useStore((s) => s.scenarios?.recipe);
+  const [r, setR] = useState<Recipe>(() => JSON.parse(JSON.stringify(initial ?? DEFAULT_RECIPE)));
+  const [json, setJson] = useState<string | null>(null);
+  const [adding, setAdding] = useState("");
+  if (!schema) return null;
+  const base = (k: string, v: any) => setR({ ...r, base: { ...r.base, [k]: v } });
+  const twist = (i: number, k: string, v: any) => setR({ ...r, twists: r.twists.map((t, j) => (j === i ? { ...t, [k]: v } : t)) });
+  const move = (i: number, d: number) => {
+    const t = [...r.twists]; const j = i + d;
+    if (j < 0 || j >= t.length) return;
+    [t[i], t[j]] = [t[j], t[i]];
+    setR({ ...r, twists: t });
   };
+  const add = (type: string) => {
+    if (!type) return;
+    const fields = schema.twists[type].fields;
+    setR({ ...r, twists: [...r.twists, { type, ...Object.fromEntries(Object.entries(fields).map(([k, f]) => [k, f.default])) }] });
+    setAdding("");
+  };
+  const dim = Number(r.base.dim ?? 2);
+  const claim: number[] = r.base.claim ?? [0, 0, 0];
+  const go = async (run: boolean) => { onClose(); await useStore.getState().loadRecipe(r, run); };
+  const save = () => {
+    const title = (r.title ?? "").trim() || `My scenario ${myRecipes().length + 1}`;
+    saveMyRecipes([...myRecipes().filter((x) => x.title !== title), { ...r, title }]);
+    useStore.getState().setToast(`Saved “${title}” to My scenarios`);
+  };
+  const shown = (f: RecipeField) => !(f.dims && dim < f.dims);
   return (
     <div className="dialog-backdrop" onClick={onClose}>
-      <div className="dialog" role="dialog" aria-labelledby="scenario-title" onClick={(e) => e.stopPropagation()} data-testid="scenario-dialog">
-        <h2 id="scenario-title">New QPV scenario</h2>
-        <p>Verifiers are placed evenly around the claimed position, wired, timed and ready to run.</p>
+      <div className="dialog builder" role="dialog" aria-labelledby="scenario-title" onClick={(e) => e.stopPropagation()} data-testid="scenario-dialog">
+        <h2 id="scenario-title">Scenario builder</h2>
+        <p>Start from a standard setup, then add twists: move people, slow or break links, put someone in the middle,
+          leak secrets. Every scenario in the demo list is built this way.</p>
+        <Field label="Name"><TextInput value={r.title ?? ""} placeholder="My scenario" onCommit={(v) => setR({ ...r, title: v })} /></Field>
+        <h3 className="builder-h">Setup</h3>
         <Field label="Dimension" title={GLOSSARY.hull}>
           <div className="seg" role="radiogroup" aria-label="Dimension">
-            {DIMS.map((d) => <button key={d} role="radio" aria-checked={f.dim === d} className={`btn ghost${f.dim === d ? " active" : ""}`}
-              onClick={() => set({ dim: d, verifiers: d === 1 ? 2 : Math.max(d + 1, f.verifiers === 2 ? d + 1 : f.verifiers) })}>{d}D</button>)}
+            {[1, 2, 3].map((d) => <button key={d} role="radio" aria-checked={dim === d} className={`btn ghost${dim === d ? " active" : ""}`}
+              onClick={() => setR({ ...r, base: { ...r.base, dim: d, verifiers: d === 1 ? undefined : r.base.verifiers } })}>{d}D</button>)}
           </div>
         </Field>
-        <Field label="Verifiers" title="One quantum verifier plus classical verifiers sending basis shares; at least d+1 for secure positioning.">
-          {f.dim === 1 ? <span className="small">2 (one on each side)</span>
-            : <NumberInput value={f.verifiers} min={minV} max={12} step={1} ariaLabel="Number of verifiers" onCommit={(v) => set({ verifiers: Math.max(minV, Math.round(v ?? minV)) })} />}
-        </Field>
+        {dim > 1 && <Field label="Verifiers" title="At least d + 1 for secure positioning; empty = d + 1.">
+          <NumberInput value={r.base.verifiers ?? null} allowNull nullLabel={String(dim + 1)} min={dim + 1} max={12} step={1}
+            ariaLabel="Number of verifiers" onCommit={(v) => base("verifiers", v === null ? undefined : Math.round(v))} /></Field>}
         <Field label="Distance (m)" title="How far each verifier stands from the claimed position.">
-          <NumberInput value={f.radius} min={0.01} step={0.5} ariaLabel="Verifier distance" onCommit={(v) => set({ radius: v ?? 3 })} />
+          <NumberInput value={r.base.radius_m ?? 3} min={0.01} step={0.5} ariaLabel="Verifier distance" onCommit={(v) => base("radius_m", v ?? 3)} />
         </Field>
         <Field label="Claimed position (m)" title={GLOSSARY.claim}>
           <div className="row">
-            {f.claim.slice(0, Math.max(1, f.dim)).map((c, i) => <NumberInput key={i} value={c} step={0.5} ariaLabel={`Claim ${"xyz"[i]}`}
-              onCommit={(v) => set({ claim: f.claim.map((x, j) => (j === i ? v ?? 0 : x)) })} />)}
+            {[0, 1, 2].slice(0, Math.max(1, dim)).map((i) => <NumberInput key={i} value={claim[i] ?? 0} step={0.5} ariaLabel={`Claim ${"xyz"[i]}`}
+              onCommit={(v) => base("claim", [0, 1, 2].map((j) => (j === i ? v ?? 0 : claim[j] ?? 0)).slice(0, Math.max(2, dim)))} />)}
           </div>
         </Field>
         <Field label="Who answers" title={GLOSSARY.attack}>
-          <Select value={f.who} options={Object.entries(answerers).map(([value, label]) => ({ value, label }))} onChange={(v) => set({ who: v })} ariaLabel="Who answers" />
+          <Select value={r.base.who ?? "honest"} ariaLabel="Who answers" onChange={(v) => base("who", v)}
+            options={Object.entries(schema.answerers).map(([value, label]) => ({ value, label }))} />
         </Field>
-        {f.who === "unentangled" && (
-          <Field label="Measurement" title={GLOSSARY.policy}><Select value={f.policy} options={policies} onChange={(v) => set({ policy: v })} /></Field>
-        )}
-        <details className="advanced">
-          <summary>Advanced</summary>
-          <div>
-            <Field label="Tolerance (ns)" title={GLOSSARY.tolerance}>
-              <NumberInput value={f.tolerance} min={0} step={0.1} ariaLabel="Tolerance" onCommit={(v) => set({ tolerance: v ?? 0.5 })} />
-            </Field>
-            <Field label="Basis from shares" title={GLOSSARY.combine}>
-              <Select value={f.combine} options={[{ value: "xor", label: "XOR of bits" }, { value: "inner_product", label: "inner product of bit strings" }]}
-                onChange={(v) => set({ combine: v })} />
-            </Field>
-          </div>
+        <Advanced>
+          {(["tolerance_ns", "policy", "combine"] as const).map((k) => (
+            <FieldInput key={k} f={schema.base[k]} label={schema.base[k].label} value={r.base[k]} recipe={r} onChange={(v) => base(k, v)} />
+          ))}
+        </Advanced>
+        <h3 className="builder-h">Twists <span className="muted small">applied in order</span></h3>
+        {r.twists.length === 0 && <div className="note">No twists: the standard setup. Add one below.</div>}
+        {r.twists.map((t, i) => {
+          const spec = schema.twists[t.type];
+          return (
+            <div key={i} className="twist" data-testid={`twist-${i}`}>
+              <div className="row twist-head">
+                <b className="grow">{i + 1}. {spec?.label ?? t.type}</b>
+                <button className="btn ghost" aria-label="Move up" onClick={() => move(i, -1)}><Icon.up /></button>
+                <button className="btn ghost" aria-label="Move down" onClick={() => move(i, 1)}><Icon.down /></button>
+                <button className="btn ghost danger" aria-label="Remove twist" onClick={() => setR({ ...r, twists: r.twists.filter((_, j) => j !== i) })}><Icon.trash /></button>
+              </div>
+              {Object.entries(spec?.fields ?? {}).filter(([, f]) => shown(f)).map(([k, f]) => (
+                <FieldInput key={k} f={f} label={f.label} value={t[k]} recipe={r} onChange={(v) => twist(i, k, v)} />
+              ))}
+            </div>
+          );
+        })}
+        <div className="row" style={{ marginTop: 6 }}>
+          <Select value={adding} ariaLabel="Add a twist" onChange={add}
+            options={[{ value: "", label: "+ Add a twist…" }, ...Object.entries(schema.twists).map(([value, t]) => ({ value, label: t.label }))]} />
+        </div>
+        <details className="advanced" onToggle={(e) => setJson((e.target as HTMLDetailsElement).open ? JSON.stringify(r, null, 1) : null)}>
+          <summary>Recipe as JSON</summary>
+          {json !== null && <textarea className="textarea code" rows={10} spellCheck={false} value={json} onChange={(e) => setJson(e.target.value)}
+            onBlur={() => { try { setR(JSON.parse(json)); } catch (e: any) { useStore.getState().setToast(`Not valid JSON: ${e.message}`, true); } }} />}
         </details>
-        {teleportBlocked && <div className="note" style={{ color: "var(--reject)" }}>The teleportation chain attack applies to XOR shares only.</div>}
-        {f.combine === "inner_product" && f.verifiers < 3 && <div className="note" style={{ color: "var(--reject)" }}>The inner product needs at least 3 verifiers.</div>}
         <div className="row" style={{ marginTop: 12 }}>
           <button className="btn ghost" onClick={() => { onClose(); useStore.getState().openDocument(blankProject()); }}
             title="An empty project to build in the editor" data-testid="btn-blank">Blank project</button>
           <span className="grow" />
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn" disabled={teleportBlocked} onClick={() => go(false)}>Build</button>
-          <button className="btn primary" disabled={teleportBlocked} onClick={() => go(true)} data-testid="scenario-run">Build and run</button>
+          <button className="btn" onClick={save} data-testid="scenario-save">Save</button>
+          <button className="btn" onClick={() => go(false)}>Build</button>
+          <button className="btn primary" onClick={() => go(true)} data-testid="scenario-run">Build and run</button>
         </div>
       </div>
     </div>
@@ -105,7 +180,7 @@ export function ScenarioDialog({ onClose }: { onClose: () => void }) {
 }
 
 /** First-visit guide: ready-made 1D, 2D and 3D scenarios, or build your own. */
-export function StartScreen({ onClose, onBuild }: { onClose: () => void; onBuild: () => void }) {
+export function StartScreen({ onClose, onBuild, onDemos }: { onClose: () => void; onBuild: () => void; onDemos: () => void }) {
   const ready = useStore((s) => s.scenarios?.ready ?? []);
   const showAttacks = useStore((s) => s.showAttacks);
   const toggleAttacks = useStore((s) => s.toggleAttacks);
@@ -138,6 +213,7 @@ export function StartScreen({ onClose, onBuild }: { onClose: () => void; onBuild
         the teleportation attack, with entanglement, always wins.</>} Results describe the model, not a security proof.</p>
       <div className="row">
         <button className="btn" onClick={() => { onClose(); onBuild(); }}>Build your own…</button>
+        <button className="btn" onClick={() => { onClose(); onDemos(); }} data-testid="start-demos">Scenario gallery…</button>
         <span className="grow" />
         <button className="btn primary" onClick={onClose}>Start exploring</button>
       </div>

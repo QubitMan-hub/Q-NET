@@ -580,3 +580,37 @@ svg .tick { font-family: var(--font-code); font-size: 10px; fill: var(--ink-3); 
 .play-bar > i { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--warn); }
 .play-foot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule); display: flex; gap: 8px; align-items: center; justify-content: space-between; }
 @media (prefers-reduced-motion: reduce) { .play-bar > div { transition: none; } }
+
+/* ------------------------------------------------------------ demo scenarios */
+.dialog.demos { width: min(720px, calc(100vw - 32px)); }
+.demo-section h3 { display: flex; align-items: center; gap: 8px; margin: 14px 0 6px; font-size: var(--fs-m); font-weight: 600; }
+.demo-letter {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--ink); color: var(--paper); font-size: var(--fs-xs);
+}
+.demo-row {
+  display: flex; align-items: center; gap: 4px; margin-bottom: 4px; padding-right: 6px;
+  border: 1px solid var(--rule); border-radius: var(--r-m); background: var(--panel);
+}
+.demo-row:hover { border-color: var(--rule-strong); }
+.demo-run {
+  display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0; text-align: left; cursor: pointer;
+  padding: 7px 10px; border: none; background: none; color: var(--ink); border-radius: var(--r-m);
+}
+.demo-run:hover { background: var(--sunken); }
+.demo-row.on { border-color: var(--focus); }
+.demo-row b { display: block; font-size: var(--fs-m); font-weight: 600; }
+.demo-expect { display: block; font-size: var(--fs-s); color: var(--ink-3); line-height: 1.4; }
+.demo-who { flex: none; font-size: var(--fs-xs); padding: 1px 7px; border-radius: 10px; border: 1px solid currentColor; margin-top: 2px; }
+.demo-who.honest { color: var(--accept); }
+.demo-who.cheat { color: var(--reject); }
+.demo-card { padding: 10px 12px; border-radius: var(--r-m); background: var(--sunken); display: flex; flex-direction: column; gap: 6px; }
+.demo-card p { margin: 0; font-size: var(--fs-s); line-height: 1.5; color: var(--ink-2); }
+.demo-card .demo-expect-line { color: var(--ink); }
+.demo-card .btn { align-self: flex-start; }
+.play .demo-open { align-self: flex-start; height: 28px; font-size: var(--fs-s); }
+.dialog.builder { width: min(620px, calc(100vw - 32px)); }
+.builder-h { margin: 14px 0 6px; font-size: var(--fs-m); font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
+.twist { border: 1px solid var(--rule); border-radius: var(--r-m); padding: 6px 10px 4px; margin-bottom: 6px; background: var(--paper); }
+.twist-head { margin-bottom: 4px; }
+.twist-head .btn { padding: 0 5px; }

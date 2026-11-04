@@ -19,13 +19,15 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 def classify_reason(v: Dict[str, Any]) -> str:
-    """Coarse category used for statistics: accepted | timeout | wrong_answer | error | undecided | rejected."""
+    """Coarse category used for statistics: accepted | lost | timeout | wrong_answer | error | undecided | rejected."""
     if v["status"] == "error":
         return "error"
     if v["verdict"] is None:
         return "undecided"
     if v["verdict"] == "accept":
         return "accepted"
+    if (v.get("observations") or {}).get("lost"):
+        return "lost"
     if v.get("trigger_type") == "timer":
         return "timeout"
     if v.get("trigger_type") == "receive":
@@ -53,6 +55,8 @@ def explain(sim: "Simulation", vid: str, entry: Dict[str, Any]) -> Tuple[str, Li
     if consumed:
         m = consumed[0]
         refs.insert(0, {"kind": "message", "id": m.id})
+    if node.observations.get("lost"):
+        return f"Lost round: {vid} was told that no photon arrived, so the round counts as lost, not as a wrong answer.", refs
     if vd["outcome"] == "accept":
         early = f", {_ns(deadline - m.arrival_time)} before the deadline" if deadline is not None and consumed else ""
         value = f" {m.value!r}" if consumed else ""

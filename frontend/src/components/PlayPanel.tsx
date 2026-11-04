@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useStore } from "../store";
-import type { Project } from "../types";
+import type { Project, Recipe } from "../types";
 import { useExperimentJob } from "./Experiments";
+import { DemoCard } from "./Demos";
 
 /** Who currently answers at the claim, in the engine's scenario vocabulary. */
 export function answering(p: Project): string {
@@ -26,6 +27,8 @@ const WHO: Record<string, [string, string]> = {
 const cheating = (who: string) => !["honest", "displaced"].includes(who);
 const whoArgs = (who: string) => (cheating(who) ? { attack: who } : { prover: who });
 const pct = (p: number) => `${Math.round(100 * p)}%`;
+const OUTCOME: Record<string, string> = { wrong_answer: "wrong answers", timeout: "too late or no answer", lost: "'no photon' reports",
+  error: "errors", undecided: "undecided", rejected: "rejected" };
 
 function headline(outcome: string, who: string) {
   if (outcome === "accept") return cheating(who) ? "Fooled! The cheaters passed as the prover." : "Accepted. The prover is where it claims.";
@@ -34,7 +37,7 @@ function headline(outcome: string, who: string) {
 }
 
 /** The friendly right panel: pick a world and who answers, play a round, then play a hundred. */
-export function PlayPanel({ onDetails }: { onDetails: () => void }) {
+export function PlayPanel({ onDetails, onDemos, onEdit }: { onDetails: () => void; onDemos: () => void; onEdit: (r: Recipe) => void }) {
   const project = useStore((s) => s.project)!;
   const analysis = useStore((s) => s.analysis);
   const sim = useStore((s) => s.sim);
@@ -45,7 +48,8 @@ export function PlayPanel({ onDetails }: { onDetails: () => void }) {
   const [busy, setBusy] = useState(false);
   const [scoreRev, setScoreRev] = useState(-1);
   const { job, start } = useExperimentJob();
-  const who = answering(project);
+  const demo = project.meta.demo;
+  const who = demo ? (demo.who === "honest" ? "honest" : "cheat") : answering(project);
   const dim = analysis?.qpv ? analysis.dimension : 0;
 
   const act = async (fn: () => Promise<void>) => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
@@ -70,11 +74,18 @@ export function PlayPanel({ onDetails }: { onDetails: () => void }) {
   const verdicts = sim?.decision.verifiers ?? [];
   const why = (verdicts.find((v: any) => v.verdict === "reject") ?? verdicts[0])?.sentence;
   const score = scoreRev === revision ? job?.result?.points?.[0]?.summary : null;
-  const theory = analysis?.references[who]?.value;
+  const theory = demo ? undefined : analysis?.references[who]?.value;  // demos change the setup the theory assumes
+  const outcomes = score ? Object.values(score.verifiers ?? {}).reduce((acc: Record<string, number>, v: any) => {
+    for (const [k, n] of Object.entries(v.categories as Record<string, number>)) acc[k] = Math.max(acc[k] ?? 0, n);
+    return acc;
+  }, {}) : {};
+  const how = Object.entries(outcomes).filter(([k]) => k !== "accepted").map(([k, n]) => `${n} ${OUTCOME[k] ?? k}`);
 
   return (
     <div className="play" data-testid="play-panel">
-      <p className="play-intro">The verifiers time their signals to meet at one spot. Only someone really there can answer every verifier in time, unless cheaters team up.</p>
+      {demo ? <DemoCard demo={demo} onBrowse={onDemos} onEdit={project.meta.recipe ? () => onEdit(project.meta.recipe!) : undefined} />
+        : <p className="play-intro">The verifiers time their signals to meet at one spot. Only someone really there can answer every verifier in time, unless cheaters team up.</p>}
+      {!demo && <button className="btn ghost demo-open" onClick={onDemos} data-testid="play-demos">Browse scenarios…</button>}
 
       <h3><span className="play-step">1</span>Pick a world</h3>
       <div className="play-worlds" role="radiogroup" aria-label="World">
@@ -114,6 +125,7 @@ export function PlayPanel({ onDetails }: { onDetails: () => void }) {
             <div><b>Passed {score.accepted} of {score.n}</b>{theory !== undefined && <span className="muted"> · theory says {pct(theory)}</span>}</div>
             <div className="play-bar"><div style={{ width: pct(score.acceptance.p) }} />
               {theory !== undefined && <i style={{ left: pct(theory) }} title={`Theory: ${pct(theory)}`} />}</div>
+            {how.length > 0 && <div className="muted small" data-testid="play-outcomes">Most rounds lost at one verifier: {how.join(", ")}</div>}
           </> : <div className="muted">Playing… {job.done ?? 0} rounds</div>}
         </div>
       )}

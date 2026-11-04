@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore, type DockTab } from "./store";
 import { nsLabel } from "./format";
-import type { Project } from "./types";
+import type { Project, Recipe } from "./types";
 import { GLOSSARY } from "./glossary";
 import { NetworkCanvas } from "./components/NetworkCanvas";
 import { AutomatonCanvas } from "./components/AutomatonCanvas";
@@ -10,6 +10,7 @@ import { Inspector } from "./components/Inspector";
 import { ConsolePanel, DecisionPanel, EventLog, Experiments, Timeline, ValidationPanel } from "./components/Dock";
 import { ComparePanel, TimingPanel } from "./components/QpvPanels";
 import { ScenarioDialog, StartScreen } from "./components/ScenarioDialog";
+import { DemoDialog } from "./components/Demos";
 import { PlayPanel, answering } from "./components/PlayPanel";
 import { Brand, Icon } from "./components/ui";
 import { deleteSelection, duplicateParticipant, addState } from "./editing";
@@ -34,7 +35,7 @@ function useDrag(initial: number, axis: "x" | "y", invert = false, min = 120, ma
 }
 
 type Panels = { left: boolean; right: boolean; expert: boolean; toggle: (side: "left" | "right") => void; toggleExpert: () => void;
-  showWelcome: () => void; buildScenario: () => void };
+  showWelcome: () => void; buildScenario: () => void; showDemos: () => void };
 
 function Toolbar({ panels }: { panels: Panels }) {
   const s = useStore();
@@ -68,6 +69,8 @@ function Toolbar({ panels }: { panels: Panels }) {
         </select>}
         <button className="btn ghost" title="New scenario: dimension, verifiers, claim, prover or attack (or a blank project)" onClick={panels.buildScenario}
           data-testid="btn-new"><Icon.plus /><span className="lbl">New</span></button>
+        <button className="btn ghost" title="Scenarios: ready-made cases and your own saved ones" onClick={panels.showDemos}
+          data-testid="btn-demos"><Icon.play /><span className="lbl lbl-keep">Scenarios</span></button>
         <button className="btn ghost" title="Open project file" onClick={() => fileRef.current?.click()}><Icon.open /><span className="lbl">Open</span></button>
         <button className="btn ghost" title="Save project file (Ctrl+S)" onClick={download} data-testid="btn-save"><Icon.save /><span className="lbl">Save</span></button>
         <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={async (e) => {
@@ -202,7 +205,8 @@ export default function App() {
   const [left, setLeft] = useState(!narrow);
   const [right, setRight] = useState(window.innerWidth >= 900);
   const [welcome, setWelcome] = useState(() => storageGet(WELCOME_KEY) !== "1");
-  const [builder, setBuilder] = useState(false);
+  const [builder, setBuilder] = useState<false | { initial: Recipe | null }>(false);
+  const [demos, setDemos] = useState(false);
   const [expert, setExpert] = useState(() => storageGet(EXPERT_KEY) === "1");
   const [details, setDetails] = useState(false);
   const panels: Panels = {
@@ -216,7 +220,8 @@ export default function App() {
       return !v;
     }),
     showWelcome: () => setWelcome(true),
-    buildScenario: () => setBuilder(true),
+    buildScenario: () => setBuilder({ initial: null }),
+    showDemos: () => setDemos(true),
   };
   const closeWelcome = () => { setWelcome(false); storageSet(WELCOME_KEY, "1"); };
   // Give the canvas room when the window becomes narrow (panels can be reopened).
@@ -345,11 +350,12 @@ export default function App() {
             <span className="spacer" />
             {details && s.selection.kind !== "project" && <button className="btn ghost" onClick={() => s.select({ kind: "project" })}>Project</button>}
           </div>
-          <div className="panel-body">{details ? <Inspector /> : <PlayPanel onDetails={() => setDetails(true)} />}</div>
+          <div className="panel-body">{details ? <Inspector /> : <PlayPanel onDetails={() => setDetails(true)} onDemos={() => setDemos(true)} onEdit={(r) => setBuilder({ initial: r })} />}</div>
         </div>
       </div>
-      {welcome && <StartScreen onClose={closeWelcome} onBuild={() => setBuilder(true)} />}
-      {builder && <ScenarioDialog onClose={() => setBuilder(false)} />}
+      {welcome && <StartScreen onClose={closeWelcome} onBuild={() => setBuilder({ initial: null })} onDemos={() => setDemos(true)} />}
+      {demos && <DemoDialog onClose={() => setDemos(false)} onEdit={(r) => setBuilder({ initial: r })} />}
+      {builder && <ScenarioDialog initial={builder.initial} onClose={() => setBuilder(false)} />}
       {s.toast && <div className={`toast${s.toast.error ? " error" : ""}`} role="status">{s.toast.text}</div>}
     </div>
   );

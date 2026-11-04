@@ -39,7 +39,7 @@ export interface ExperimentSpec {
 export interface Project {
   format: string; version: number;
   meta: { name: string; description: string; protocol: { name: string; version: string; references: string[] };
-    assumptions: string[]; limitations: string[] };
+    assumptions: string[]; limitations: string[]; demo?: DemoInfo; recipe?: Recipe };
   physics: { signal_speed_mps: number; allow_superluminal: boolean };
   simulation: { seed: number; backend: string; max_time_ns: number; max_events: number; stop_when: string; priorities: Record<string, number> };
   claim: { prover: string | null; position: number[] };
@@ -63,8 +63,31 @@ export interface Analysis {
   references: Record<string, Reference>; default_tau_ns: number;
 }
 export interface ReadyScenario { id: string; label: string; args: Record<string, any> }
+/** The texts a recipe carries into its project: what it is, what to watch, what to expect. */
+export interface DemoInfo {
+  id?: string | null; section?: string | null; title: string; who: "honest" | "cheat"; expect: string; watch: string;
+}
+/** A scenario as data: a base setup plus generic twists, applied in order by the engine. */
+export interface Twist { type: string; [field: string]: any }
+export interface Recipe {
+  base: Record<string, any>; twists: Twist[];
+  title?: string; watch?: string; expect?: string; who?: string; id?: string; section?: string;
+}
+export interface RecipeField {
+  type: "number" | "bool" | "choice" | "party" | "verifier"; label: string; default: any;
+  choices?: (string | number)[]; allow_all?: boolean; dims?: number;
+}
+export interface RecipeSchema {
+  base: Record<string, RecipeField>; twists: Record<string, { label: string; fields: Record<string, RecipeField> }>;
+  strategies: Record<string, string>; answerers: Record<string, string>;
+}
+export interface DemoEntry {
+  id: string; section: string; title: string; expect: string; watch: string; who?: string;
+  expect_rate: [number, number]; recipe: Recipe;
+}
 export interface ScenarioCatalog {
-  ready: ReadyScenario[]; answerers: Record<string, string>; provers: string[]; attacks: string[];
+  ready: ReadyScenario[]; demos: { sections: Record<string, string>; demos: DemoEntry[] }; recipe: RecipeSchema;
+  answerers: Record<string, string>; provers: string[]; attacks: string[];
   policies: string[]; combines: string[]; presets: Record<string, { label: string; unit: string; range?: number[]; values?: string[] }>;
 }
 export interface LightPoint {

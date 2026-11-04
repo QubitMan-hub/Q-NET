@@ -209,7 +209,7 @@
     "qpv_verifier_quantum": {
       "name": "qpv_verifier_quantum",
       "role": "verifier",
-      "description": "Quantum verifier: sends the BB84 qubit H^b|x>, with b = combine(shares). Times its signal to reach the claimed position at the meeting time t_meet and accepts iff the answer equals x and arrives by t_meet + d(V, claim)/c + tolerance (local clock, integer fs). t_meet is t_ref, moved later when the farthest verifier could only make t_ref by sending before t = 0.",
+      "description": "Quantum verifier: sends the BB84 qubit H^b|x>, with b = combine(shares). Times its signal to reach the claimed position at the meeting time t_meet and accepts iff the answer equals x and arrives by t_meet + d(V, claim)/c + tolerance (local clock, integer fs). t_meet is t_ref, moved later when the farthest verifier could only make t_ref by sending before t = 0. extra_delay_ns compensates a slower path; with allow_loss_reports a 'nophoton' reply ends the round as lost.",
       "ports": [
         "prover"
       ],
@@ -222,6 +222,15 @@
           "default": 0.5,
           "min": 0,
           "description": "Allowed processing time of the prover (deadline slack)."
+        },
+        "extra_delay_ns": {
+          "default": 0.0,
+          "min": 0,
+          "description": "Extra one-way delay of this verifier's path to the claim beyond straight-line light speed (fibre, electronics): it sends that much earlier and waits that much longer."
+        },
+        "allow_loss_reports": {
+          "default": false,
+          "description": "Accept a 'nophoton' reply as a lost round instead of waiting for an answer."
         },
         "combine": {
           "default": "xor",
@@ -311,12 +320,12 @@
             {
               "op": "set",
               "var": "deadline_fs",
-              "expr": "t_meet_fs + claim_travel_fs + fs(tolerance_ns)"
+              "expr": "t_meet_fs + claim_travel_fs + fs(extra_delay_ns) + fs(tolerance_ns)"
             },
             {
               "op": "timer",
               "name": "emit",
-              "at_fs": "t_meet_fs - claim_travel_fs"
+              "at_fs": "t_meet_fs - claim_travel_fs - fs(extra_delay_ns)"
             }
           ]
         },
@@ -437,6 +446,37 @@
           ]
         },
         {
+          "id": "lost",
+          "from": "waiting",
+          "to": "rejected",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "nophoton"
+            ],
+            "port": "prover"
+          },
+          "guard": "allow_loss_reports",
+          "label": "no photon reported",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "cancel_timer",
+              "name": "deadline"
+            },
+            {
+              "op": "record",
+              "key": "lost",
+              "value": "1"
+            },
+            {
+              "op": "verdict",
+              "outcome": "reject",
+              "reason": "'the prover reported that no photon arrived'"
+            }
+          ]
+        },
+        {
           "id": "timeout",
           "from": "waiting",
           "to": "rejected",
@@ -465,7 +505,7 @@
     "qpv_verifier_classical": {
       "name": "qpv_verifier_classical",
       "role": "verifier",
-      "description": "Classical verifier: sends its share of the basis. Times its signal to reach the claimed position at the meeting time t_meet and accepts iff the answer equals x and arrives by t_meet + d(V, claim)/c + tolerance (local clock, integer fs). t_meet is t_ref, moved later when the farthest verifier could only make t_ref by sending before t = 0.",
+      "description": "Classical verifier: sends its share of the basis. Times its signal to reach the claimed position at the meeting time t_meet and accepts iff the answer equals x and arrives by t_meet + d(V, claim)/c + tolerance (local clock, integer fs). t_meet is t_ref, moved later when the farthest verifier could only make t_ref by sending before t = 0. extra_delay_ns compensates a slower path; with allow_loss_reports a 'nophoton' reply ends the round as lost.",
       "ports": [
         "prover"
       ],
@@ -478,6 +518,15 @@
           "default": 0.5,
           "min": 0,
           "description": "Allowed processing time of the prover (deadline slack)."
+        },
+        "extra_delay_ns": {
+          "default": 0.0,
+          "min": 0,
+          "description": "Extra one-way delay of this verifier's path to the claim beyond straight-line light speed (fibre, electronics): it sends that much earlier and waits that much longer."
+        },
+        "allow_loss_reports": {
+          "default": false,
+          "description": "Accept a 'nophoton' reply as a lost round instead of waiting for an answer."
         },
         "share_index": {
           "default": 0,
@@ -567,12 +616,12 @@
             {
               "op": "set",
               "var": "deadline_fs",
-              "expr": "t_meet_fs + claim_travel_fs + fs(tolerance_ns)"
+              "expr": "t_meet_fs + claim_travel_fs + fs(extra_delay_ns) + fs(tolerance_ns)"
             },
             {
               "op": "timer",
               "name": "emit",
-              "at_fs": "t_meet_fs - claim_travel_fs"
+              "at_fs": "t_meet_fs - claim_travel_fs - fs(extra_delay_ns)"
             }
           ]
         },
@@ -683,6 +732,37 @@
               "op": "verdict",
               "outcome": "reject",
               "reason": "'wrong answer ' + str(msg.value) + ' (expected ' + str(x) + ')'"
+            }
+          ]
+        },
+        {
+          "id": "lost",
+          "from": "waiting",
+          "to": "rejected",
+          "trigger": {
+            "type": "receive",
+            "tags": [
+              "nophoton"
+            ],
+            "port": "prover"
+          },
+          "guard": "allow_loss_reports",
+          "label": "no photon reported",
+          "duration_ns": 0,
+          "actions": [
+            {
+              "op": "cancel_timer",
+              "name": "deadline"
+            },
+            {
+              "op": "record",
+              "key": "lost",
+              "value": "1"
+            },
+            {
+              "op": "verdict",
+              "outcome": "reject",
+              "reason": "'the prover reported that no photon arrived'"
             }
           ]
         },

@@ -20,13 +20,15 @@ from ..protocol.project import normalize, verifier_ids
 from . import automata as qa
 
 PROVERS = ("honest", "displaced", "none")
-ATTACKS = ("none", "unentangled", "teleport", "guess")
-ANSWERERS = ("honest", "displaced", "unentangled", "teleport", "guess")
+ATTACKS = ("none", "unentangled", "teleport", "guess", "split", "lossy")
+ANSWERERS = ("honest", "displaced", "unentangled", "teleport", "guess", "split", "lossy")
 POLICIES = ("breidbart", "Z", "X", "random")
 ATTACKER_PROFILE = {"unentangled": "no_entanglement", "guess": "no_entanglement",
-                    "teleport": "bounded_entanglement", "displaced": "no_entanglement"}
+                    "teleport": "bounded_entanglement", "displaced": "no_entanglement",
+                    "split": "no_entanglement", "lossy": "no_entanglement"}
 LABELS = {"honest": "honest prover", "displaced": "prover at the wrong position",
-          "unentangled": "unentangled attack", "teleport": "teleportation attack", "guess": "guessing attack"}
+          "unentangled": "unentangled attack", "teleport": "teleportation attack", "guess": "guessing attack",
+          "split": "photon-splitting attack (needs a multi-photon pulse)", "lossy": "selective 'no photon' attack"}
 CANVAS = 520  # editor canvas units from the claim to a verifier
 
 
@@ -94,7 +96,7 @@ def _ui(claim, pos, radius, row=0):
 def qpv_verifiers(doc) -> List[Dict[str, Any]]:
     vs = [p for p in doc["participants"] if p["id"] in verifier_ids(doc)]
     kinds = [p["automaton"] for p in vs]
-    if not vs or kinds[0] != "qpv_verifier_quantum" or any(k != "qpv_verifier_classical" for k in kinds[1:]):
+    if not vs or not kinds[0].startswith("qpv_verifier_quantum") or any(k != "qpv_verifier_classical" for k in kinds[1:]):
         raise ValueError("this needs a QPV setup: a quantum verifier followed by classical verifiers from the "
                          "QPV library (build one with the scenario builder)")
     return vs
@@ -125,6 +127,7 @@ def _add_answerers(doc, answerer, policy, processing_ns, displacement_m):
         return
     for j, v in enumerate(vs):
         a = (qa.adv_unentangled(j, n) if answerer == "unentangled" else qa.adv_chain(j, n) if answerer == "teleport"
+             else qa.adv_split(j, n) if answerer == "split" else qa.adv_lossy(j, n) if answerer == "lossy"
              else qa.adv_guess())
         doc["automata"][a["name"]] = a
         pos = [round((c + p) / 2, 12) for c, p in zip(claim, v["position"])]
@@ -182,7 +185,7 @@ def build(dim: int = 2, verifiers: Optional[int] = None, radius_m: float = 3.0, 
             verifier_type="quantum" if j == 0 else "classical"))
     doc["verification"]["verifiers"] = [f"V{j}" for j in range(n)]
     share = "rand_bit()" if combine == "xor" else f"rand_bits({int(share_bits)})"
-    doc["resources"].append({"id": "vshared", "type": "shared_random", "holders": doc["verification"]["verifiers"],
+    doc["resources"].append({"id": "vshared", "type": "shared_random", "holders": list(doc["verification"]["verifiers"]),
                              "vars": {"x": "rand_bit()", "shares": "[" + ", ".join([share] * (n - 1)) + "]"}})
     doc["claim"]["prover"] = None
     if answerer != "none":
@@ -217,6 +220,10 @@ def autowire(project: Dict[str, Any]) -> Dict[str, Any]:
     pos = {p["id"]: p["position"] for p in doc["participants"]}
     prover = next((p["id"] for p in others if p["id"] == doc["claim"].get("prover")), None)
     links = []
+    automaton_of = {p["id"]: p["automaton"] for p in doc["participants"]}
+
+    def declared(pid):
+        return (doc["automata"].get(automaton_of[pid]) or {}).get("port_kinds") or {}
 
     def add(lid, kind, a, ap, b, bp):
         keep = {k: v for k, v in old.get(lid, {}).items() if k not in ("id", "kind", "a", "b")}
@@ -239,7 +246,10 @@ def autowire(project: Dict[str, Any]) -> Dict[str, Any]:
     for i, a in attackers.items():
         for j, b in attackers.items():
             if i < j and f"p{j}" in ports[a] and f"p{i}" in ports[b]:
-                add(f"e{i}{j}", "classical", a, f"p{j}", b, f"p{i}")
+                for kind in ("classical", "quantum"):  # quantum only where both strategies declare it
+                    if kind in ports[a][f"p{j}"] & ports[b][f"p{i}"] and (kind == "classical" or (
+                            kind in declared(a).get(f"p{j}", ()) and kind in declared(b).get(f"p{i}", ()))):
+                        add(("e" if kind == "classical" else "qe") + f"{i}{j}", kind, a, f"p{j}", b, f"p{i}")
     doc["links"] = links
     return doc
 

@@ -81,6 +81,10 @@ interface Store {
   toggleAttacks(): void;
   refreshSim(full?: boolean): Promise<void>;
   loadScenario(body: Record<string, any>): Promise<void>;
+  /** Build a ready-made demo, run one round and show it on the geometry view. */
+  loadDemo(id: string): Promise<void>;
+  /** Build any recipe (a base setup plus twists), run one round and show it. */
+  loadRecipe(recipe: import("./types").Recipe, run?: boolean): Promise<void>;
   switchAttack(attack: string, policy?: string): Promise<void>;
   autowire(): Promise<void>;
   goTo(ref: Ref): void;
@@ -341,6 +345,19 @@ export const useStore = create<Store>((set, get) => {
         const r = await api.scenario(body);
         await install(r, `Built “${r.project.meta.name}”`);
       });
+    },
+
+    async loadDemo(id) {
+      await get().loadScenario({ demo: id });
+      await get().runToEnd();
+      set({ view: "spacetime", dock: "decision" });
+    },
+
+    async loadRecipe(recipe, run = true) {
+      await get().loadScenario({ recipe });
+      if (!run || !get().sim) return;
+      await get().runToEnd();
+      set({ view: "spacetime", dock: "decision" });
     },
 
     async switchAttack(attack, policy) {

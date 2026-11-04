@@ -68,5 +68,7 @@ def reference(project: Dict[str, Any], attack: str) -> Dict[str, Any]:
                         "(Tomamichel, Fehr, Kaniewski & Wehner, NJP 2013; two-verifier game)"),
         "teleport": (1.0, "teleportation attack with k EPR pairs (Buhrman et al., SIAM J. Comput. 2014)"),
         "guess": (0.5 ** n, f"(1/2)^{n}: an independent random bit for each of the {n} verifiers"),
+        "split": (1.0, "each attacker gets its own copy from a multi-photon pulse and measures it in the full basis"),
+        "lossy": (0.5, "the basis guess is right half the time; the other rounds are reported as lost, never wrong"),
     }[attack]
     return {"value": value, "label": LABELS[attack], "source": source}
