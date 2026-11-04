@@ -12,6 +12,7 @@
    "id": "a1_midway",
    "section": "A",
    "title": "A1 · Prover exactly in the middle",
+   "who": "honest",
    "expect": "Accepted every round.",
    "watch": "Both verifiers are 3 m away, so they send at the same moment and both signals meet at P.",
    "expect_rate": [
@@ -30,6 +31,7 @@
    "id": "a2_off_centre",
    "section": "A",
    "title": "A2 · Prover closer to one verifier",
+   "who": "honest",
    "expect": "Accepted every round.",
    "watch": "V1 is only 1 m away, so it sends later than V0. Open the Timing tab: both still reach P together.",
    "expect_rate": [
@@ -54,6 +56,7 @@
    "id": "a3_outside",
    "section": "A",
    "title": "A3 · Claim outside the verifiers",
+   "who": "cheat",
    "expect": "The cheater passes every round.",
    "watch": "The claim is 10 m out, past V1. A cheater standing next to V1 gets both signals first and answers early. Claims must lie between the verifiers.",
    "expect_rate": [
@@ -88,6 +91,7 @@
    "id": "a3_off_line",
    "section": "A",
    "title": "A3 · Claim off to the side",
+   "who": "cheat",
    "expect": "The cheater passes every round.",
    "watch": "The claim is 2 m to the side of the road. A cheater on the road is closer to both verifiers, so it passes. Two verifiers only check the position along their line.",
    "expect_rate": [
@@ -118,6 +122,7 @@
    "id": "a4_at_verifier",
    "section": "A",
    "title": "A4 · Prover right at a verifier",
+   "who": "honest",
    "expect": "Accepted every round.",
    "watch": "The claim is V0's own spot. It works, but it only proves 'someone is next to V0'.",
    "expect_rate": [
@@ -146,6 +151,7 @@
    "id": "a5_3d",
    "section": "A",
    "title": "A5 · 3D: four verifiers around the prover",
+   "who": "honest",
    "expect": "Accepted every round.",
    "watch": "Four verifiers, not on one plane, surround the claim. Rotate the 3D view in the Geometry tab.",
    "expect_rate": [
@@ -164,6 +170,7 @@
    "id": "a7_within",
    "section": "A",
    "title": "A7 · Prover 4 cm off, inside the precision",
+   "who": "honest",
    "expect": "Accepted every round, with a thin margin.",
    "watch": "An allowance of 0.5 ns minus 0.2 ns of processing leaves about ±4.5 cm. 4 cm still fits.",
    "expect_rate": [
@@ -188,6 +195,7 @@
    "id": "a7_beyond",
    "section": "A",
    "title": "A7 · Prover 6 cm off, beyond the precision",
+   "who": "honest",
    "expect": "Rejected every round: the answer to V1 is late.",
    "watch": "6 cm is just past the precision limit, so the honest prover's answer misses V1's deadline.",
    "expect_rate": [
@@ -212,6 +220,7 @@
    "id": "b1_moving",
    "section": "B",
    "title": "B1 · Prover moved 3 cm (10% of light speed for 1 ns)",
+   "who": "honest",
    "expect": "Accepted every round.",
    "watch": "Positions are fixed during a run, so this shows where a very fast prover would be when it answers. At everyday speeds the movement within a round is nanometres.",
    "expect_rate": [
@@ -236,6 +245,7 @@
    "id": "b2_slow_prover",
    "section": "B",
    "title": "B2 · Prover takes 0.8 ns to respond",
+   "who": "honest",
    "expect": "Rejected every round.",
    "watch": "The allowance is 0.5 ns, but the prover needs 0.8 ns. Add a 'Change the time allowance' twist of 1 ns and it passes, with a blurrier location.",
    "expect_rate": [
@@ -260,6 +270,7 @@
    "id": "b3_clock_offset",
    "section": "B",
    "title": "B3 · V1's clock is 1 ns ahead",
+   "who": "honest",
    "expect": "V0 accepts, V1 rejects, so the claim is rejected.",
    "watch": "V1 sends 1 ns early and also stops waiting 1 ns early. Change the offset to 0.2 ns and it passes.",
    "expect_rate": [
@@ -284,6 +295,7 @@
    "id": "b4_fibre_honest",
    "section": "B",
    "title": "B4 · V1 uses fibre and adjusts for it",
+   "who": "honest",
    "expect": "Accepted every round.",
    "watch": "V1's link runs at 2/3 of light speed. V1 sends about 5 ns earlier and waits 5 ns longer, so the honest prover passes.",
    "expect_rate": [
@@ -309,6 +321,7 @@
    "id": "b4_fibre_cheater",
    "section": "B",
    "title": "B4 · Fibre adjustment exploited by a cheater",
+   "who": "cheat",
    "expect": "The cheater passes every round from 70 cm away.",
    "watch": "V1 allows 5 ns for fibre, but the cheater relays through open air at full speed. The spare time lets it pass from 70 cm away instead of a few cm.",
    "expect_rate": [
@@ -346,6 +359,7 @@
    "id": "b5_noise",
    "section": "B",
    "title": "B5 · Noisy channel (15% errors)",
+   "who": "honest",
    "expect": "About 85% of rounds accepted, the same as the best cheaters without entanglement.",
    "watch": "Press Play 100 rounds. At 15% errors an honest prover looks just like a cheater.",
    "expect_rate": [
@@ -370,6 +384,7 @@
    "id": "b6_loss",
    "section": "B",
    "title": "B6 · 60% of photons lost",
+   "who": "honest",
    "expect": "About 40% of rounds accepted; the rest get no answer.",
    "watch": "Press Play 100 rounds. When the photon is lost the prover has nothing to answer, and the verifiers time out.",
    "expect_rate": [
@@ -394,6 +409,7 @@
    "id": "b7_two_photons",
    "section": "B",
    "title": "B7 · The laser sends two photons",
+   "who": "cheat",
    "expect": "The cheaters pass every round.",
    "watch": "With two copies, each cheater keeps one, waits for the basis and reads it correctly.",
    "expect_rate": [
@@ -417,6 +433,7 @@
    "id": "b8_many_rounds",
    "section": "B",
    "title": "B8 · Why many rounds matter",
+   "who": "cheat",
    "expect": "About 85% per round; almost never 100 in a row.",
    "watch": "Press Play 100 rounds. Passing all 100 would happen about once in 7.5 million tries.",
    "expect_rate": [
@@ -435,6 +452,7 @@
    "id": "c1a_liar_theta_side",
    "section": "C",
    "title": "C1 · Lone cheater on V1's side",
+   "who": "cheat",
    "expect": "About 50% of rounds.",
    "watch": "It must answer V0 before V0's photon could reach it, so that answer is a coin flip.",
    "expect_rate": [
@@ -465,6 +483,7 @@
    "id": "c1b_liar_qubit_side",
    "section": "C",
    "title": "C1 · Lone cheater on V0's side",
+   "who": "cheat",
    "expect": "About 85% of rounds.",
    "watch": "It gets the photon early but not the basis, so it reads it in the Breidbart basis.",
    "expect_rate": [
@@ -496,6 +515,7 @@
    "id": "c2_guess_basis",
    "section": "C",
    "title": "C2 · Two cheaters guessing the basis",
+   "who": "cheat",
    "expect": "About 75% of rounds.",
    "watch": "Right basis half the time, a coin flip otherwise.",
    "expect_rate": [
@@ -515,6 +535,7 @@
    "id": "c2_breidbart",
    "section": "C",
    "title": "C2 · Two cheaters, best possible strategy",
+   "who": "cheat",
    "expect": "About 85% of rounds (the proven limit).",
    "watch": "No strategy without entanglement can do better than cos²(π/8) ≈ 85%.",
    "expect_rate": [
@@ -533,6 +554,7 @@
    "id": "c3_intercept",
    "section": "C",
    "title": "C3 · Eavesdropper reads and resends the photon",
+   "who": "honest",
    "expect": "The honest prover passes about 75% of rounds.",
    "watch": "When the eavesdropper guesses the wrong basis, the photon it sends on is random. This is sabotage, not impersonation.",
    "expect_rate": [
@@ -558,6 +580,7 @@
    "id": "c4_guess",
    "section": "C",
    "title": "C4 · Cheaters who just guess",
+   "who": "cheat",
    "expect": "About 25% of rounds (two coin flips).",
    "watch": "Each cheater answers a random bit; both have to be right.",
    "expect_rate": [
@@ -576,6 +599,7 @@
    "id": "d1_teleport",
    "section": "D",
    "title": "D1 · Teleportation with one entangled pair",
+   "who": "cheat",
    "expect": "The cheaters pass every round.",
    "watch": "The photon is teleported before anyone knows the basis; the fix-up afterwards is ordinary bits.",
    "expect_rate": [
@@ -594,6 +618,7 @@
    "id": "d3_chain_2d",
    "section": "D",
    "title": "D3 · Teleportation chain in 2D (XOR basis)",
+   "who": "cheat",
    "expect": "The cheaters pass every round.",
    "watch": "Splitting the basis into XOR pieces doesn't help: a chain of teleports still wins.",
    "expect_rate": [
@@ -612,6 +637,7 @@
    "id": "d4_noisy_low",
    "section": "D",
    "title": "D4 · Poor entanglement (50% noise)",
+   "who": "cheat",
    "expect": "About 75% of rounds, worse than cheating without entanglement.",
    "watch": "The shared pair is half noise (quality p = 0.5). Teleporting through it adds errors: (1 + p)/2 = 75% right.",
    "expect_rate": [
@@ -635,6 +661,7 @@
    "id": "d4_noisy_high",
    "section": "D",
    "title": "D4 · Good entanglement (10% noise)",
+   "who": "cheat",
    "expect": "About 95% of rounds.",
    "watch": "Quality p = 0.9. Above p ≈ 0.71 (below about 29% noise), imperfect entanglement already beats the 85% limit.",
    "expect_rate": [
@@ -658,6 +685,7 @@
    "id": "e1_impostor",
    "section": "E",
    "title": "E1 · Cheater standing at the claimed spot",
+   "who": "cheat",
    "expect": "The cheater passes every round.",
    "watch": "Position checking proves where, not who. Adding a secret key would be needed to check identity.",
    "expect_rate": [
@@ -683,6 +711,7 @@
    "id": "e3_tamper",
    "section": "E",
    "title": "E3 · Someone in the middle flips the basis",
+   "who": "honest",
    "expect": "The honest prover passes about 50% of rounds.",
    "watch": "The prover reads with the wrong setting and gets random answers. The verifiers notice errors.",
    "expect_rate": [
@@ -708,6 +737,7 @@
    "id": "e3_delay",
    "section": "E",
    "title": "E3 · Someone in the middle holds messages for 2 ns",
+   "who": "honest",
    "expect": "Rejected every round.",
    "watch": "Delaying only blocks the check. It can never make a cheater pass.",
    "expect_rate": [
@@ -734,6 +764,7 @@
    "id": "e4_near_verifier",
    "section": "E",
    "title": "E4 · Cheater right next to V0",
+   "who": "cheat",
    "expect": "About 85% of rounds.",
    "watch": "Being near a verifier gives no extra advantage. It is the lone cheater of C1.",
    "expect_rate": [
@@ -765,6 +796,7 @@
    "id": "e5_two_at_claim",
    "section": "E",
    "title": "E5 · Honest prover and cheater at the same spot",
+   "who": "cheat",
    "expect": "Accepted: the cheater got the photon and answered.",
    "watch": "Both get the basis, but only one can have the photon. The honest prover is left waiting.",
    "expect_rate": [
@@ -784,13 +816,13 @@
       "role": "cheater"
      }
     ]
-   },
-   "who": "cheat"
+   }
   },
   {
    "id": "f1_selective_loss",
    "section": "F",
    "title": "F1 · Cheaters say 'no photon' when they guess wrong",
+   "who": "cheat",
    "expect": "About 50% accepted, 50% 'lost', no wrong answers.",
    "watch": "Press Play 100 rounds and check the outcomes: lost rounds, but never a wrong bit. With real loss above 50%, verifiers can't tell this from an honest prover.",
    "expect_rate": [
@@ -814,6 +846,7 @@
    "id": "f3_fibre_detour",
    "section": "F",
    "title": "F3 · Cheater with a straight route past a 12 m fibre detour",
+   "who": "cheat",
    "expect": "The cheater passes every round from next to V0.",
    "watch": "V1 allows 50 ns for its fibre detour. The cheater takes the straight path and has time to spare.",
    "expect_rate": [
@@ -856,6 +889,7 @@
    "id": "f4_leaked_basis",
    "section": "F",
    "title": "F4 · The basis leaks to a cheater",
+   "who": "cheat",
    "expect": "The cheater passes every round.",
    "watch": "Knowing the basis early, it reads the photon the moment it arrives. Verifier secrets must stay secret.",
    "expect_rate": [

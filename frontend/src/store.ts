@@ -14,6 +14,11 @@ export function storageSet(key: string, value: string | null) {
     else window.localStorage.setItem(key, value);
   } catch { /* storage unavailable: nothing to persist */ }
 }
+/** A shared link to a gallery scenario: #scenario=<id>. */
+export function scenarioFromHash(): string | null {
+  const m = window.location.hash.match(/scenario=([\w-]+)/);
+  return m ? m[1] : null;
+}
 function exampleFromHash(): string | null {
   const m = window.location.hash.match(/example=([\w-]+)/);
   return m ? m[1] : null;
@@ -187,6 +192,8 @@ export const useStore = create<Store>((set, get) => {
         const firstVerifier = p.participants.find((x) => x.role === "verifier");
         set({ focus: firstVerifier?.id ?? p.participants[0]?.id ?? null });
       });
+      const linked = scenarioFromHash();
+      if (linked && get().scenarios?.demos.demos.some((d) => d.id === linked)) await get().loadDemo(linked);
     },
 
     async refreshSim(full = false) {
@@ -349,12 +356,14 @@ export const useStore = create<Store>((set, get) => {
 
     async loadDemo(id) {
       await get().loadScenario({ demo: id });
+      history.replaceState(null, "", `${window.location.pathname}${window.location.search}#scenario=${id}`);
       await get().runToEnd();
       set({ view: "spacetime", dock: "decision" });
     },
 
     async loadRecipe(recipe, run = true) {
       await get().loadScenario({ recipe });
+      if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
       if (!run || !get().sim) return;
       await get().runToEnd();
       set({ view: "spacetime", dock: "decision" });

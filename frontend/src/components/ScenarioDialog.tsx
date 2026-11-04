@@ -4,6 +4,7 @@ import { storageGet, storageSet, useStore } from "../store";
 import { IN_BROWSER } from "../api";
 import { GLOSSARY } from "../glossary";
 import { Advanced, Check, Field, Icon, NumberInput, Select, TextInput } from "./ui";
+import { ScenarioList } from "./Demos";
 
 /** An empty project for building a protocol from scratch in the editor. */
 function blankProject(): Project {
@@ -179,8 +180,10 @@ export function ScenarioDialog({ onClose, initial }: { onClose: () => void; init
   );
 }
 
-/** First-visit guide: ready-made 1D, 2D and 3D scenarios, or build your own. */
-export function StartScreen({ onClose, onBuild, onDemos }: { onClose: () => void; onBuild: () => void; onDemos: () => void }) {
+/** First visit: quick 1D/2D/3D runs and the whole scenario gallery, searchable. */
+export function StartScreen({ onClose, onBuild, onDemos, onEdit }: {
+  onClose: () => void; onBuild: () => void; onDemos: () => void; onEdit: (r: Recipe) => void;
+}) {
   const ready = useStore((s) => s.scenarios?.ready ?? []);
   const showAttacks = useStore((s) => s.showAttacks);
   const toggleAttacks = useStore((s) => s.toggleAttacks);
@@ -188,9 +191,12 @@ export function StartScreen({ onClose, onBuild, onDemos }: { onClose: () => void
   const open = async (id: string) => { onClose(); await buildAndRun({ id }); };
   return (
     <div className="welcome start" role="dialog" aria-labelledby="welcome-title" data-testid="start-screen">
-      <h2 id="welcome-title">Simulate quantum position verification</h2>
-      <p>Verifiers send a qubit and the pieces of its basis so they meet only at the claimed position; whoever answers there in time,
-        and correctly, is accepted. Pick a setup to run it now{IN_BROWSER ? " in your browser" : ""}.</p>
+      <div className="start-hero">
+        <h2 id="welcome-title">Can a prover prove where it is?</h2>
+        <p>Verifiers send a photon and the key to read it so that both meet only at the claimed spot. Whoever answers there in time,
+          and correctly, is accepted. Run a case below{IN_BROWSER ? " right here in your browser" : ""} and see who gets through.</p>
+      </div>
+      <h3 className="start-h">Quick start</h3>
       <table className="start-grid">
         <thead><tr><th />{columns.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead>
         <tbody>
@@ -205,15 +211,17 @@ export function StartScreen({ onClose, onBuild, onDemos }: { onClose: () => void
           ))}
         </tbody>
       </table>
-      <label className="row small" style={{ marginBottom: 8 }}>
+      <label className="row small" style={{ marginBottom: 4 }}>
         <input type="checkbox" checked={showAttacks} onChange={toggleAttacks} data-testid="show-attacks" />
         Show attack examples (unentangled and entangled attackers)
       </label>
-      <p className="welcome-note">The honest prover is always accepted.{showAttacks && <> The unentangled attack wins about 85% of rounds (cos²(π/8));
-        the teleportation attack, with entanglement, always wins.</>} Results describe the model, not a security proof.</p>
+      <h3 className="start-h">All scenarios <span className="muted small">honest provers, cheaters, noise, loss, leaks</span></h3>
+      <ScenarioList compact onPicked={onClose} onEdit={onEdit} />
+      <p className="welcome-note">Results describe the model, not a security proof.{showAttacks && <> The unentangled attack wins about 85% of rounds
+        (cos²(π/8)); the teleportation attack, with entanglement, always wins.</>}</p>
       <div className="row">
         <button className="btn" onClick={() => { onClose(); onBuild(); }}>Build your own…</button>
-        <button className="btn" onClick={() => { onClose(); onDemos(); }} data-testid="start-demos">Scenario gallery…</button>
+        <button className="btn" onClick={() => { onClose(); onDemos(); }} data-testid="start-demos">Open the gallery…</button>
         <span className="grow" />
         <button className="btn primary" onClick={onClose}>Start exploring</button>
       </div>

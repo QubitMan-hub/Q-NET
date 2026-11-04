@@ -28,6 +28,8 @@ def main(argv=None) -> int:
     p.add_argument("project", nargs="?")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--open", action="store_true", help="open the workbench in your web browser")
+    p.add_argument("--scenario", help="start on this gallery scenario (see 'qpv scenarios')")
 
     p = sub.add_parser("run", help="run one simulation headlessly")
     p.add_argument("project", help="project file or example name")
@@ -51,6 +53,13 @@ def main(argv=None) -> int:
     p = sub.add_parser("validate", help="validate a project file")
     p.add_argument("project")
 
+    sub.add_parser("scenarios", help="list the scenario gallery (every case in the write-up)")
+    p = sub.add_parser("scenario", help="run a gallery scenario or a recipe file for many rounds and report the pass rate")
+    p.add_argument("scenario", help="scenario id from 'qpv scenarios', or a recipe .json file")
+    p.add_argument("--rounds", type=int, default=100)
+    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--save", help="also write the built project here (open it with 'qpv serve <file>')")
+
     sub.add_parser("examples", help="list bundled examples")
     p = sub.add_parser("export-examples", help="write the bundled example projects to a directory")
     p.add_argument("directory")
@@ -59,9 +68,29 @@ def main(argv=None) -> int:
     if a.cmd == "serve":
         import uvicorn
         from .server.app import create_app
-        print(f"QPV Workbench on http://{a.host}:{a.port}")
+        url = f"http://{a.host}:{a.port}/" + (f"#scenario={a.scenario}" if a.scenario else "")
+        if not (Path(__file__).parent / "server" / "static" / "index.html").exists():
+            print("The web interface is not built yet. Run:  cd frontend && npm install && npm run build", file=sys.stderr)
+            return 1
+        print(f"QPV Workbench on {url}  (Ctrl-C to stop)")
+        if a.open:
+            import threading
+            import webbrowser
+            threading.Timer(1.0, lambda: webbrowser.open(url)).start()
         uvicorn.run(create_app(_session(a.project)), host=a.host, port=a.port, log_level="warning")
         return 0
+    if a.cmd == "scenarios":
+        from .qpv import recipe
+        g = recipe.demos()
+        for letter, title in g["sections"].items():
+            print(f"\n{letter}. {title}")
+            for d in g["demos"]:
+                if d["section"] == letter:
+                    print(f"  {d['id']:<22} {d['title']}")
+        print("\nRun one:  qpv scenario <id>      Open one:  qpv serve --open --scenario <id>")
+        return 0
+    if a.cmd == "scenario":
+        return _run_scenario(a)
     if a.cmd == "examples":
         from .library import EXAMPLES, example
         for n in EXAMPLES:
@@ -147,3 +176,36 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def _run_scenario(a) -> int:
+    """Build a gallery scenario (or a recipe file), run it for many rounds and print what happened."""
+    import json
+    from .experiments import run_experiment
+    from .qpv import recipe
+    if a.scenario.endswith(".json"):
+        r = json.loads(Path(a.scenario).read_text())
+        title, expect = r.get("title", a.scenario), r.get("expect", "")
+    else:
+        try:
+            d = recipe.demo(a.scenario)
+        except KeyError:
+            print(f"unknown scenario {a.scenario!r}; 'qpv scenarios' lists them", file=sys.stderr)
+            return 1
+        r = {**d["recipe"], **{k: d[k] for k in ("id", "section", "title", "watch", "expect", "who") if k in d}}
+        title, expect = d["title"], d["expect"]
+    doc = recipe.compose(r)
+    print(title)
+    if doc["meta"].get("description"):
+        print("  " + doc["meta"]["description"])
+    res = run_experiment(doc, {"runs": a.rounds, "seed": a.seed})["points"][0]["summary"]
+    acc = res["acceptance"]
+    print(f"\nPassed {res['accepted']} of {res['n']} rounds ({100 * acc['p']:.1f}%, 95% CI {100 * acc['lo']:.1f}-{100 * acc['hi']:.1f}%)")
+    for vid, v in res["verifiers"].items():
+        print(f"  {vid}: " + ", ".join(f"{n} {k.replace('_', ' ')}" for k, n in v["categories"].items()))
+    if expect:
+        print(f"Expected: {expect}")
+    if a.save:
+        dump_json(doc, a.save)
+        print(f"Project written to {a.save}")
+    return 0

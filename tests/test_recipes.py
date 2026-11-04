@@ -66,3 +66,17 @@ def test_api_builds_demos_and_recipes():
     assert status == 400 and "warp" in body["detail"]
     status, _, _ = api.handle("POST", "/api/qpv/scenario", {"demo": "nope"})
     assert status == 404
+
+
+def test_every_demo_says_who_answers():
+    assert all(d["who"] in ("honest", "cheat") for d in DEMOS)
+
+
+def test_cli_lists_and_runs_scenarios(capsys, tmp_path):
+    from qpvsim.cli import main
+    assert main(["scenarios"]) == 0
+    assert "d1_teleport" in capsys.readouterr().out
+    out = tmp_path / "p.json"
+    assert main(["scenario", "a1_midway", "--rounds", "5", "--save", str(out)]) == 0
+    assert "Passed 5 of 5 rounds" in capsys.readouterr().out and out.exists()
+    assert main(["scenario", "no_such_case"]) == 1

@@ -15,7 +15,7 @@ import { PlayPanel, answering } from "./components/PlayPanel";
 import { Brand, Icon } from "./components/ui";
 import { deleteSelection, duplicateParticipant, addState } from "./editing";
 import { IN_BROWSER, onEngineStatus } from "./api";
-import { storageGet, storageSet } from "./store";
+import { scenarioFromHash, storageGet, storageSet } from "./store";
 
 function useDrag(initial: number, axis: "x" | "y", invert = false, min = 120, max = 2000) {
   const [size, setSize] = useState(initial);
@@ -204,7 +204,7 @@ export default function App() {
   const narrow = typeof window !== "undefined" && window.innerWidth < 1100;
   const [left, setLeft] = useState(!narrow);
   const [right, setRight] = useState(window.innerWidth >= 900);
-  const [welcome, setWelcome] = useState(() => storageGet(WELCOME_KEY) !== "1");
+  const [welcome, setWelcome] = useState(() => storageGet(WELCOME_KEY) !== "1" && !scenarioFromHash());
   const [builder, setBuilder] = useState<false | { initial: Recipe | null }>(false);
   const [demos, setDemos] = useState(false);
   const [expert, setExpert] = useState(() => storageGet(EXPERT_KEY) === "1");
@@ -243,7 +243,9 @@ export default function App() {
     const onHash = () => {
       const m = window.location.hash.match(/example=([\w-]+)/);
       const st = useStore.getState();
-      if (m && st.meta?.examples?.[m[1]]) st.loadExample(m[1]);
+      const sc = scenarioFromHash();
+      if (sc && st.project?.meta.demo?.id !== sc && st.scenarios?.demos.demos.some((d) => d.id === sc)) st.loadDemo(sc);
+      else if (m && st.meta?.examples?.[m[1]]) st.loadExample(m[1]);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -353,7 +355,8 @@ export default function App() {
           <div className="panel-body">{details ? <Inspector /> : <PlayPanel onDetails={() => setDetails(true)} onDemos={() => setDemos(true)} onEdit={(r) => setBuilder({ initial: r })} />}</div>
         </div>
       </div>
-      {welcome && <StartScreen onClose={closeWelcome} onBuild={() => setBuilder({ initial: null })} onDemos={() => setDemos(true)} />}
+      {welcome && <StartScreen onClose={closeWelcome} onBuild={() => setBuilder({ initial: null })} onDemos={() => setDemos(true)}
+        onEdit={(r) => setBuilder({ initial: r })} />}
       {demos && <DemoDialog onClose={() => setDemos(false)} onEdit={(r) => setBuilder({ initial: r })} />}
       {builder && <ScenarioDialog initial={builder.initial} onClose={() => setBuilder(false)} />}
       {s.toast && <div className={`toast${s.toast.error ? " error" : ""}`} role="status">{s.toast.text}</div>}
