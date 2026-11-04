@@ -90,5 +90,5 @@ def test_duplicate_port_and_unknown_participant():
     p["links"].append(dict(p["links"][1], id="dup"))
     p["links"].append(dict(p["links"][1], id="ghost", a={"node": "Nobody", "port": "x"}))
     msgs = [i.message for i in validate_project(p)]
-    assert any("already has a classical link" in m for m in msgs)
+    assert any("duplicates classical link" in m for m in msgs)
     assert any("unknown participant 'Nobody'" in m for m in msgs)

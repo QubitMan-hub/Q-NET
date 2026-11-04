@@ -240,11 +240,19 @@ class Simulation:
         self.messages: Dict[int, Message] = {}
         self._next_msg = 1
         self.nodes: Dict[str, Node] = {}
-        self.out_links: Dict[Tuple[str, str, str], OutLink] = {}
+        # (node, port, kind) -> the links a send on that port travels on; a classical send goes out on every
+        # one of them (a broadcast), a qubit on at most one (no-cloning; validation enforces it).
+        self.out_links: Dict[Tuple[str, str, str], List[OutLink]] = {}
         self.link_rngs: Dict[str, np.random.Generator] = {}
         self.stopped = False
         self.stop_reason: Optional[str] = None
         self.verifiers = verifier_ids(project)
+        # Longest verifier-to-claim travel time: the earliest instant all verifiers' signals can meet at
+        # the claim if none may send before t = 0.
+        self.max_claim_travel_fs = max(
+            (tu.propagation_fs(math.dist(p["position"], self.claim_pos), self.speed_mps)
+             for p in project["participants"]
+             if p["id"] in self.verifiers and len(p["position"]) == len(self.claim_pos)), default=0)
         self.counters = {"classical_sent": 0, "quantum_sent": 0, "lost": 0, "transitions": 0,
                          "quantum_ops": 0, "measurements": 0, "capability_violations": 0,
                          "protocol_errors": 0}
@@ -265,11 +273,11 @@ class Simulation:
             base = tu.propagation_fs(length, speed)
             lat = tu.ns(link.get("latency_ns", 0))
             a, b = link["a"], link["b"]
-            self.out_links[(a["node"], a["port"], link["kind"])] = OutLink(
-                link, b["node"], b["port"], length, speed, base, lat)
+            self.out_links.setdefault((a["node"], a["port"], link["kind"]), []).append(OutLink(
+                link, b["node"], b["port"], length, speed, base, lat))
             if not link.get("directed"):
-                self.out_links[(b["node"], b["port"], link["kind"])] = OutLink(
-                    link, a["node"], a["port"], length, speed, base, lat)
+                self.out_links.setdefault((b["node"], b["port"], link["kind"]), []).append(OutLink(
+                    link, a["node"], a["port"], length, speed, base, lat))
             self.link_rngs[link["id"]] = make_rng(self.seed, f"link:{link['id']}")
         self._record(0, "sim.init", None, {
             "seed": self.seed, "backend": self.backend.info.name,
@@ -340,6 +348,8 @@ class Simulation:
             self._stop("quiescent: no pending events")
             return None
         if nxt.time > self.max_time:
+            # Nothing happens before the limit, so the run has covered time up to it.
+            self.scheduler.now = max(self.scheduler.now, self.max_time)
             self._stop(f"time limit {tu.fmt(self.max_time)} reached")
             return None
         if self.scheduler.executed_count >= self.max_events:
@@ -515,6 +525,7 @@ class Simulation:
         dist = math.dist(node.position, self.claim_pos) if same_dim else float("nan")
         ctx["claim_travel_ns"] = dist / (self.speed_mps / 1e9)
         ctx["claim_travel_fs"] = tu.propagation_fs(dist, self.speed_mps) if same_dim else None
+        ctx["max_claim_travel_fs"] = self.max_claim_travel_fs
         ctx["node_id"] = node.id
         ctx["role"] = node.role
         ctx["speed_m_per_ns"] = self.speed_mps / 1e9
@@ -708,21 +719,28 @@ class Simulation:
                      f"{node.id} halted in state '{node.state}': {message}")
 
     # ------------------------------------------------------------ messaging
-    def _new_message(self, node: Node, tr: Transition, kind: str, port: str, tag: str,
-                     value: Any, qubit: Optional[int], t: int) -> Message:
-        ol = self.out_links.get((node.id, port, kind))
-        if ol is None:
+    def _new_messages(self, node: Node, tr: Transition, kind: str, port: str, tag: str,
+                      value: Any, qubit: Optional[int], t: int) -> List[Message]:
+        """One message per link leaving ``port``: a classical value is copied onto each, a qubit cannot be."""
+        ols = self.out_links.get((node.id, port, kind))
+        if not ols:
             raise ProtocolError(f"no {kind} link on port '{port}' of {node.id}")
-        m = Message(id=self._next_msg, kind=kind, tag=str(tag), value=value, qubit=qubit,
-                    src=node.id, src_port=port, dst=ol.dst, dst_port=ol.dst_port,
-                    link=ol.link["id"], sent_by_transition=tr.id, send_time=t,
-                    causal_past=list(node.consumed))
-        self._next_msg += 1
-        self.messages[m.id] = m
-        return m
+        if qubit is not None and len(ols) > 1:
+            raise ProtocolError(f"port '{port}' of {node.id} has {len(ols)} quantum links; a qubit cannot be "
+                                "sent down more than one (no-cloning)")
+        out = []
+        for ol in ols:
+            m = Message(id=self._next_msg, kind=kind, tag=str(tag), value=value, qubit=qubit,
+                        src=node.id, src_port=port, dst=ol.dst, dst_port=ol.dst_port,
+                        link=ol.link["id"], sent_by_transition=tr.id, send_time=t,
+                        causal_past=list(node.consumed))
+            self._next_msg += 1
+            self.messages[m.id] = m
+            out.append(m)
+        return out
 
     def _transmit(self, node: Node, m: Message, t: int) -> None:
-        ol = self.out_links[(node.id, m.src_port, m.kind)]
+        ol = next(o for o in self.out_links[(node.id, m.src_port, m.kind)] if o.link["id"] == m.link)
         rng = self.link_rngs[ol.link["id"]]
         jitter = 0
         if ol.link.get("jitter_ns"):
@@ -838,15 +856,17 @@ class Simulation:
             if not caps.classical_send:
                 raise CapabilityViolation(node.id, "classical_send", "classical transmission")
             val = ev("value")
-            m = self._new_message(node, tr, "classical", a["port"], a["tag"], _jsonable(val), None, t)
-            sends.append(m)
-            out.update(msg=m.id, port=a["port"], tag=a["tag"], value=m.value)
+            ms = self._new_messages(node, tr, "classical", a["port"], a["tag"], _jsonable(val), None, t)
+            sends.extend(ms)
+            out.update(msg=ms[0].id, port=a["port"], tag=a["tag"], value=ms[0].value)
+            if len(ms) > 1:
+                out["msgs"] = [m.id for m in ms]
         elif op == "send_qubit":
             if not caps.quantum_send:
                 raise CapabilityViolation(node.id, "quantum_send", "quantum transmission")
             slot = a["qubit"]
             qid = self._qubit(node, slot, t)
-            m = self._new_message(node, tr, "quantum", a["port"], a["tag"], None, qid, t)
+            m = self._new_messages(node, tr, "quantum", a["port"], a["tag"], None, qid, t)[0]
             del node.qubits[slot]
             sends.append(m)
             out.update(msg=m.id, port=a["port"], tag=a["tag"], slot=slot)
@@ -1030,7 +1050,7 @@ class Simulation:
 
     def link_summary(self) -> List[Dict[str, Any]]:
         out, seen = [], set()
-        for ol in self.out_links.values():
+        for ol in (o for ols in self.out_links.values() for o in ols):
             lid = ol.link["id"]
             if lid in seen:
                 continue

@@ -81,14 +81,18 @@ def _verifier(kind: str, emit: List[Dict[str, Any]], description: str, params: D
               {"op": "record", "key": "rtt_ns", "value": "msg.time - sent_at"}]
     return _automaton(
         f"qpv_verifier_{kind}", "verifier",
-        description + " Times its signal to reach the claimed position at t_ref and accepts iff the answer "
-                      "equals x and arrives by t_ref + d(V, claim)/c + tolerance (local clock, integer fs).",
+        description + " Times its signal to reach the claimed position at the meeting time t_meet and accepts "
+                      "iff the answer equals x and arrives by t_meet + d(V, claim)/c + tolerance (local clock, "
+                      "integer fs). t_meet is t_ref, moved later when the farthest verifier could only make "
+                      "t_ref by sending before t = 0.",
         ["prover"],
         [
             {"id": "arm", "from": "idle", "to": "armed", "trigger": {"type": "start"}, "label": "schedule challenge",
              "duration_ns": 0, "actions": [
-                 {"op": "set", "var": "deadline_fs", "expr": "fs(t_ref_ns) + claim_travel_fs + fs(tolerance_ns)"},
-                 {"op": "timer", "name": "emit", "at_fs": "fs(t_ref_ns) - claim_travel_fs"}]},
+                 {"op": "set", "var": "t_meet_fs", "expr": "max(fs(t_ref_ns), max_claim_travel_fs + fs(1))"},
+                 {"op": "record", "key": "meeting_ns", "value": "t_meet_fs / 1e6"},
+                 {"op": "set", "var": "deadline_fs", "expr": "t_meet_fs + claim_travel_fs + fs(tolerance_ns)"},
+                 {"op": "timer", "name": "emit", "at_fs": "t_meet_fs - claim_travel_fs"}]},
             {"id": "emit", "from": "armed", "to": "waiting", "trigger": {"type": "timer", "name": "emit"},
              "label": "send challenge", "duration_ns": 0, "actions": emit + [
                  {"op": "set", "var": "sent_at", "expr": "now"},
@@ -116,10 +120,12 @@ def _verifier(kind: str, emit: List[Dict[str, Any]], description: str, params: D
          _state("waiting", "normal", "Awaiting answer", 290),
          _state("accepted", "terminal", "Accept", 470, -300, "accept"),
          _state("rejected", "terminal", "Reject", 470, 300, "reject")],
-        params={"t_ref_ns": {"default": 20.0, "description": "Agreed time at which all challenges reach the claimed position."},
-                "tolerance_ns": {"default": 0.5, "description": "Allowed processing time of the prover (deadline slack)."},
+        params={"t_ref_ns": {"default": 20.0, "description": "Agreed time at which all challenges reach the claimed "
+                                                            "position; moved later if a verifier is too far away to make it."},
+                "tolerance_ns": {"default": 0.5, "min": 0,
+                                 "description": "Allowed processing time of the prover (deadline slack)."},
                 **params},
-        variables={"x": 0, "shares": [0], "deadline_fs": 0, "sent_at": 0.0},
+        variables={"x": 0, "shares": [0], "t_meet_fs": 0, "deadline_fs": 0, "sent_at": 0.0},
         port_kinds={"prover": ["quantum", "classical"] if kind == "quantum" else ["classical"]})
 
 

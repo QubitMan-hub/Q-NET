@@ -15,7 +15,8 @@ interpreted by a whitelist walker (never ``eval``):
 Randomness functions draw from the participant's own seeded RNG stream, so
 expressions are reproducible.  Time values in expressions are float
 nanoseconds of the participant's *local* clock; ``now_fs``, ``msg.time_fs``,
-``claim_travel_fs`` and ``fs()``/``travel_fs()`` give exact integer femtoseconds.
+``claim_travel_fs`` (and ``max_claim_travel_fs``, the longest verifier-to-claim travel) and
+``fs()``/``travel_fs()`` give exact integer femtoseconds.
 """
 
 from __future__ import annotations

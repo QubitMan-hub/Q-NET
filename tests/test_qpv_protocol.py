@@ -25,7 +25,9 @@ def fingerprint(sim):
         "events": [(r.kind, r.node, r.time) for r in sim.trace if r.kind not in ("sim.init",)],
         "messages": [(m.src, m.dst, m.tag, m.value, m.depart_time, m.arrival_time, m.status)
                      for m in sim.messages.values()],
-        "observations": {n: v.observations for n, v in sim.nodes.items()},
+        # meeting_ns is recorded by the newer verifiers only (the meeting time, postponed if needed)
+        "observations": {n: {k: x for k, x in v.observations.items() if k != "meeting_ns"}
+                         for n, v in sim.nodes.items()},
         "verdicts": {n: (v.verdict or {}).get("outcome") for n, v in sim.nodes.items()},
         "decision": sim.snapshot()["decision"]["outcome"],
     }

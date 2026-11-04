@@ -229,9 +229,15 @@ def validate_project(project: Dict[str, Any]) -> List[Issue]:
             if (not isinstance(d, dict) or "default" not in d) and k not in p.get("params", {}):
                 err(f"{pp}.params.{k}", "required parameter has no value")
         for k, v in p.get("params", {}).items():
-            msg = validate_syntax(v) if isinstance(v, str) and (declared.get(k) or {}).get("type") == "expr" else None
+            d = declared.get(k) if isinstance(declared.get(k), dict) else {}
+            msg = validate_syntax(v) if isinstance(v, str) and d.get("type") == "expr" else None
             if msg:
                 err(f"{pp}.params.{k}", msg)
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                if "min" in d and v < d["min"]:
+                    err(f"{pp}.params.{k}", f"{k} must be at least {d['min']} (got {v})")
+                if "max" in d and v > d["max"]:
+                    err(f"{pp}.params.{k}", f"{k} must be at most {d['max']} (got {v})")
         if caps is not None:
             used = automaton_operations(spec)
             if not caps.prepare and used["ops"] & {"prepare", "prepare_bb84"}:
@@ -269,16 +275,24 @@ def validate_project(project: Dict[str, Any]) -> List[Issue]:
             ends.append((e.get("node"), e.get("port")))
         if len(ends) == 2 and ends[0][0] == ends[1][0] and ends[0][0] is not None:
             err(lp, "a link cannot connect a participant to itself")
+        pair = (link.get("kind"), frozenset(ends))
+        if pair in ports_linked and ports_linked[pair] is not link:
+            err(lp, f"duplicates {link.get('kind')} link {ports_linked[pair].get('id')}: both join "
+                    + " and ".join(f"{n}.{p}" for n, p in ends))
+        ports_linked[pair] = link
         for end_i, (node, port) in enumerate(ends):
             if link.get("directed"):
                 dirs = ("out",) if end_i == 0 else ("in",)
             else:
                 dirs = ("out", "in")
-            for direction in dirs:
-                k2 = (node, port, link.get("kind"), direction)
+            # A port may receive on several links, and a classical send goes out on all of its links (a
+            # broadcast); a qubit leaves on one channel only, so a port has at most one outgoing quantum link.
+            if link.get("kind") == "quantum" and "out" in dirs:
+                k2 = (node, port, "quantum", "out")
                 if k2 in ports_linked and ports_linked[k2] is not link:
-                    err(lp, f"port {node}.{port} already has a {link.get('kind')} link "
-                            f"({ports_linked[k2].get('id')}) in direction '{direction}'")
+                    err(lp, f"port {node}.{port} already sends qubits on quantum link {ports_linked[k2].get('id')}; "
+                            "a qubit cannot be sent down two channels (no-cloning). Make one of them directed "
+                            "towards this port, or use another port")
                 ports_linked[k2] = link
             pspec = participant(project, node)
             if pspec:

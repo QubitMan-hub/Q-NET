@@ -439,7 +439,7 @@ class Console:
             s = sim()
             rows = [f"  {ol.link['id']:<6} {kind:<9} {node_}.{port} -> {ol.dst}.{ol.dst_port}  "
                     f"{ol.distance_m:.6g} m  delay {tu.fmt(ol.base_delay_fs + ol.latency_fs)}"
-                    for (node_, port, kind), ol in s.out_links.items()]
+                    for (node_, port, kind), ols in s.out_links.items() for ol in ols]
             return _lines(rows, "no links"), list(S.project["links"])
 
         @cmd("geometry", "geometry", "Where everyone is, and how long light takes between them and to the claim.",

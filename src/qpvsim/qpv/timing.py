@@ -34,10 +34,18 @@ def _schedule(project: Dict[str, Any]) -> Dict[str, Any]:
         answers = [m.arrival_time for m in sim.messages.values() if m.dst == vid and m.arrival_time is not None]
         if not sent or not armed:
             missing.append(f"{vid} never {'sent a challenge' if not sent else 'armed a timer named ' + repr('deadline')}")
-        p = sim.nodes[vid].cfg
+        node = sim.nodes[vid]
+        p = node.cfg
+        # timers whose target had already passed when they were armed fire at once, so they fire late
+        overdue = [{"name": r.data["name"], "target_fs": node.clock.to_global(r.data["target_local_fs"]),
+                    "fired_fs": r.data["fire_fs"]}
+                   for r in sim.trace if r.node == vid and r.kind == "timer.set"
+                   and node.clock.to_global(r.data["target_local_fs"]) < r.data["fire_fs"]]
+        meeting = node.observations.get("meeting_ns")
         rows.append({"id": vid, "type": verifier_type(sim.project, p), "position": p["position"],
                      "send_fs": sent[0].depart_time if sent else None, "deadline_fs": armed[-1] if armed else None,
-                     "answer_fs": min(answers) if answers else None})
+                     "answer_fs": min(answers) if answers else None, "overdue_timers": overdue,
+                     "meeting_ns": meeting, "t_ref_ns": node.params.get("t_ref_ns")})
     reason = "; ".join(missing) or (None if rows else "the project has no verifiers")
     return {"verifiers": rows, "reason": reason}
 
@@ -57,10 +65,19 @@ def table(project: Dict[str, Any]) -> Dict[str, Any]:
                      "at_claim_fs": v["send_fs"] + tu.propagation_fs(dist, speed)})
     meet = max(r["at_claim_fs"] for r in rows)
     issues = []
+    moved = next((r for r in rows if isinstance(r["meeting_ns"], (int, float)) and isinstance(r["t_ref_ns"], (int, float))
+                  and r["meeting_ns"] > r["t_ref_ns"] + 1e-6), None)
+    if moved:
+        far = max(rows, key=lambda r: r["distance_m"])
+        issues.append(f"The meeting time moved from {moved['t_ref_ns']:g} ns to {moved['meeting_ns']:.6f} ns: "
+                      f"{far['id']} is {far['distance_m']:.6g} m from the claim and could not reach it by "
+                      f"{moved['t_ref_ns']:g} ns without sending before t = 0.")
     for r in rows:
         r["honest_answer_fs"] = meet + proc + r["travel_fs"]
         r["slack_fs"] = r["deadline_fs"] - r["honest_answer_fs"]
-        r["inconsistent"] = []
+        r["inconsistent"] = [f"{r['id']}'s timer '{o['name']}' was due at {o['target_fs'] / tu.NS:.6f} ns, before "
+                             f"it could be set, so it fired late at {o['fired_fs'] / tu.NS:.6f} ns"
+                             for o in r["overdue_timers"]]
         if r["at_claim_fs"] < meet:
             r["inconsistent"].append(f"{r['id']}'s challenge reaches the claim {(meet - r['at_claim_fs']) / tu.NS:.6f} ns "
                                      "before the others")
