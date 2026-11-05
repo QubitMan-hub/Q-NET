@@ -83,8 +83,19 @@ export interface RecipeSchema {
 }
 export interface DemoEntry {
   id: string; section: string; title: string; expect: string; watch: string; who?: string;
-  expect_rate: [number, number]; recipe: Recipe;
+  expect_rate: [number, number]; recipe: Recipe; runs?: number;
 }
+/** A verdict over many rounds (verification.test), as the engine evaluates it from recorded rounds. */
+export interface TestResult {
+  rounds: number; min_correct: number; min_answered: number; pass_probability: number; pass_range?: [number, number];
+  per_round?: { correct: number; lost: number; wrong: number; n: number }; blocks?: number; blocks_passed?: number;
+}
+export interface ReportRow {
+  id: string; section: string; title: string; who: string; expect: string; expect_rate: [number, number];
+  n: number; accepted: number; p: number; lo: number; hi: number; ok: boolean; outcomes: Record<string, number>;
+  test?: TestResult;
+}
+export interface TheoryResult { answerer: string; label: string; values: number[]; theory: (number | null)[]; note: string }
 export interface ScenarioCatalog {
   ready: ReadyScenario[]; demos: { sections: Record<string, string>; demos: DemoEntry[] }; recipe: RecipeSchema;
   answerers: Record<string, string>; provers: string[]; attacks: string[];

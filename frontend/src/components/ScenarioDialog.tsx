@@ -5,6 +5,7 @@ import { IN_BROWSER } from "../api";
 import { GLOSSARY } from "../glossary";
 import { Advanced, Check, Field, Icon, NumberInput, Select, TextInput } from "./ui";
 import { ScenarioList } from "./Demos";
+import { copyText, recipeLink } from "../links";
 
 /** An empty project for building a protocol from scratch in the editor. */
 function blankProject(): Project {
@@ -135,7 +136,7 @@ export function ScenarioDialog({ onClose, initial }: { onClose: () => void; init
             options={Object.entries(schema.answerers).map(([value, label]) => ({ value, label }))} />
         </Field>
         <Advanced>
-          {(["tolerance_ns", "policy", "combine"] as const).map((k) => (
+          {(["tolerance_ns", "policy", "combine", "bases"] as const).filter((k) => schema.base[k]).map((k) => (
             <FieldInput key={k} f={schema.base[k]} label={schema.base[k].label} value={r.base[k]} recipe={r} onChange={(v) => base(k, v)} />
           ))}
         </Advanced>
@@ -172,6 +173,8 @@ export function ScenarioDialog({ onClose, initial }: { onClose: () => void; init
           <span className="grow" />
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn" onClick={save} data-testid="scenario-save">Save</button>
+          <button className="btn" title="Copy a link that opens exactly this scenario" data-testid="scenario-link"
+            onClick={async () => { const l = recipeLink(r); useStore.getState().setToast(await copyText(l) ? "Link copied" : l); }}>Copy link</button>
           <button className="btn" onClick={() => go(false)}>Build</button>
           <button className="btn primary" onClick={() => go(true)} data-testid="scenario-run">Build and run</button>
         </div>

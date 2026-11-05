@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import type { Project, Recipe } from "../types";
 import { useExperimentJob } from "./Experiments";
 import { DemoCard } from "./Demos";
+import { describeChance, testRule } from "../links";
 
 /** Who currently answers at the claim, in the engine's scenario vocabulary. */
 export function answering(p: Project): string {
@@ -37,7 +38,9 @@ function headline(outcome: string, who: string) {
 }
 
 /** The friendly right panel: pick a world and who answers, play a round, then play a hundred. */
-export function PlayPanel({ onDetails, onDemos, onEdit }: { onDetails: () => void; onDemos: () => void; onEdit: (r: Recipe) => void }) {
+export function PlayPanel({ onDetails, onDemos, onEdit, onChart }: {
+  onDetails: () => void; onDemos: () => void; onEdit: (r: Recipe) => void; onChart: () => void;
+}) {
   const project = useStore((s) => s.project)!;
   const analysis = useStore((s) => s.analysis);
   const sim = useStore((s) => s.sim);
@@ -74,7 +77,8 @@ export function PlayPanel({ onDetails, onDemos, onEdit }: { onDetails: () => voi
   const verdicts = sim?.decision.verifiers ?? [];
   const why = (verdicts.find((v: any) => v.verdict === "reject") ?? verdicts[0])?.sentence;
   const score = scoreRev === revision ? job?.result?.points?.[0]?.summary : null;
-  const theory = demo ? undefined : analysis?.references[who]?.value;  // demos change the setup the theory assumes
+  const theory = demo ? undefined : analysis?.references[who]?.value ?? undefined;  // demos change the setup the theory assumes
+  const test = score?.test;
   const outcomes = score ? Object.values(score.verifiers ?? {}).reduce((acc: Record<string, number>, v: any) => {
     for (const [k, n] of Object.entries(v.categories as Record<string, number>)) acc[k] = Math.max(acc[k] ?? 0, n);
     return acc;
@@ -83,9 +87,13 @@ export function PlayPanel({ onDetails, onDemos, onEdit }: { onDetails: () => voi
 
   return (
     <div className="play" data-testid="play-panel">
-      {demo ? <DemoCard demo={demo} onBrowse={onDemos} onEdit={project.meta.recipe ? () => onEdit(project.meta.recipe!) : undefined} />
+      {demo ? <DemoCard demo={demo} recipe={project.meta.recipe} onBrowse={onDemos} onChart={analysis?.qpv ? onChart : undefined}
+          onEdit={project.meta.recipe ? () => onEdit(project.meta.recipe!) : undefined} />
         : <p className="play-intro">The verifiers time their signals to meet at one spot. Only someone really there can answer every verifier in time, unless cheaters team up.</p>}
-      {!demo && <button className="btn ghost demo-open" onClick={onDemos} data-testid="play-demos">Browse scenarios…</button>}
+      {!demo && <div className="row">
+        <button className="btn ghost demo-open" onClick={onDemos} data-testid="play-demos">Browse scenarios…</button>
+        {analysis?.qpv && <button className="btn ghost demo-open" onClick={onChart} data-testid="play-chart">Pass-rate chart…</button>}
+      </div>}
 
       <h3><span className="play-step">1</span>Pick a world</h3>
       <div className="play-worlds" role="radiogroup" aria-label="World">
@@ -126,6 +134,10 @@ export function PlayPanel({ onDetails, onDemos, onEdit }: { onDetails: () => voi
             <div className="play-bar"><div style={{ width: pct(score.acceptance.p) }} />
               {theory !== undefined && <i style={{ left: pct(theory) }} title={`Theory: ${pct(theory)}`} />}</div>
             {how.length > 0 && <div className="muted small" data-testid="play-outcomes">Most rounds lost at one verifier: {how.join(", ")}</div>}
+            {test && <div className="play-test" data-testid="play-test">
+              <b>Judged over {testRule(test)}:</b> passes {describeChance(test.pass_probability)}
+              {test.blocks ? <span className="muted"> ({test.blocks_passed} of {test.blocks} played blocks passed)</span> : null}
+            </div>}
           </> : <div className="muted">Playing… {job.done ?? 0} rounds</div>}
         </div>
       )}

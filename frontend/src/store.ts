@@ -24,6 +24,7 @@ function exampleFromHash(): string | null {
   return m ? m[1] : null;
 }
 import { clone } from "./format";
+import { presentFromHash, recipeFromHash, recipeLink } from "./links";
 import type { Analysis, Issue, PortKinds, Project, Ref, ScenarioCatalog, Selection, SimState, VerifierType } from "./types";
 
 export type CanvasView = "network" | "automaton" | "spacetime";
@@ -60,6 +61,7 @@ interface Store {
   highlightChain: number[];
   theme: "light" | "dark";
   showAttacks: boolean; // attack examples are hidden until the user asks for them
+  present: { ids: string[]; index: number } | null; // presentation mode: gallery scenarios shown one by one
 
   init(): Promise<void>;
   edit(fn: (p: Project) => void, opts?: { select?: Selection }): void;
@@ -91,6 +93,9 @@ interface Store {
   /** Build any recipe (a base setup plus twists), run one round and show it. */
   loadRecipe(recipe: import("./types").Recipe, run?: boolean): Promise<void>;
   switchAttack(attack: string, policy?: string): Promise<void>;
+  startPresentation(ids: string[] | "all", index?: number): void;
+  setPresentIndex(index: number): void;
+  stopPresentation(): void;
   autowire(): Promise<void>;
   goTo(ref: Ref): void;
 }
@@ -166,6 +171,7 @@ export const useStore = create<Store>((set, get) => {
     past: [], future: [], playing: false, playRate: 4, busy: false, dirtyPush: false, toast: null,
     linkKind: "quantum", consoleLog: [], highlightChain: [], theme: "light",
     showAttacks: storageGet(ATTACKS_KEY) === "1",
+    present: null,
 
     async init() {
       await guard(async () => {
@@ -192,8 +198,10 @@ export const useStore = create<Store>((set, get) => {
         const firstVerifier = p.participants.find((x) => x.role === "verifier");
         set({ focus: firstVerifier?.id ?? p.participants[0]?.id ?? null });
       });
-      const linked = scenarioFromHash();
-      if (linked && get().scenarios?.demos.demos.some((d) => d.id === linked)) await get().loadDemo(linked);
+      const linked = scenarioFromHash(), shared = recipeFromHash(), show = presentFromHash();
+      if (show) get().startPresentation(show, Number(window.location.hash.match(/at=(\d+)/)?.[1] ?? 0));
+      else if (linked && get().scenarios?.demos.demos.some((d) => d.id === linked)) await get().loadDemo(linked);
+      else if (shared) await get().loadRecipe(shared);
     },
 
     async refreshSim(full = false) {
@@ -363,10 +371,26 @@ export const useStore = create<Store>((set, get) => {
 
     async loadRecipe(recipe, run = true) {
       await get().loadScenario({ recipe });
-      if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
+      // the address bar now holds a link to exactly this scenario, ready to share
+      if (get().project?.meta.recipe) history.replaceState(null, "", recipeLink(recipe).slice(window.location.origin.length));
       if (!run || !get().sim) return;
       await get().runToEnd();
       set({ view: "spacetime", dock: "decision" });
+    },
+
+    startPresentation(ids, index = 0) {
+      const all = get().scenarios?.demos.demos.map((d) => d.id) ?? [];
+      const list = ids === "all" ? all : ids.filter((id) => all.includes(id));
+      if (!list.length) { get().setToast("No scenarios to present", true); return; }
+      set({ present: { ids: list, index: Math.max(0, Math.min(index, list.length - 1)) }, playing: false });
+    },
+    setPresentIndex(index) {
+      const pr = get().present;
+      if (pr) set({ present: { ...pr, index: Math.max(0, Math.min(index, pr.ids.length - 1)) } });
+    },
+    stopPresentation() {
+      set({ present: null });
+      if (window.location.hash.includes("present=")) history.replaceState(null, "", window.location.pathname + window.location.search);
     },
 
     async switchAttack(attack, policy) {

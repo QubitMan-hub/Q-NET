@@ -12,6 +12,10 @@ import { ComparePanel, TimingPanel } from "./components/QpvPanels";
 import { ScenarioDialog, StartScreen } from "./components/ScenarioDialog";
 import { DemoDialog } from "./components/Demos";
 import { PlayPanel, answering } from "./components/PlayPanel";
+import { Presenter } from "./components/Presenter";
+import { ReportDialog } from "./components/ReportDialog";
+import { ChartDialog } from "./components/ChartDialog";
+import { presentFromHash, recipeFromHash } from "./links";
 import { Brand, Icon } from "./components/ui";
 import { deleteSelection, duplicateParticipant, addState } from "./editing";
 import { IN_BROWSER, onEngineStatus } from "./api";
@@ -204,7 +208,9 @@ export default function App() {
   const narrow = typeof window !== "undefined" && window.innerWidth < 1100;
   const [left, setLeft] = useState(!narrow);
   const [right, setRight] = useState(window.innerWidth >= 900);
-  const [welcome, setWelcome] = useState(() => storageGet(WELCOME_KEY) !== "1" && !scenarioFromHash());
+  const [welcome, setWelcome] = useState(() => storageGet(WELCOME_KEY) !== "1" && !scenarioFromHash() && !recipeFromHash() && !presentFromHash());
+  const [report, setReport] = useState(false);
+  const [chart, setChart] = useState(false);
   const [builder, setBuilder] = useState<false | { initial: Recipe | null }>(false);
   const [demos, setDemos] = useState(false);
   const [expert, setExpert] = useState(() => storageGet(EXPERT_KEY) === "1");
@@ -243,8 +249,10 @@ export default function App() {
     const onHash = () => {
       const m = window.location.hash.match(/example=([\w-]+)/);
       const st = useStore.getState();
-      const sc = scenarioFromHash();
-      if (sc && st.project?.meta.demo?.id !== sc && st.scenarios?.demos.demos.some((d) => d.id === sc)) st.loadDemo(sc);
+      const sc = scenarioFromHash(), rc = recipeFromHash(), show = presentFromHash();
+      if (show) st.startPresentation(show);
+      else if (sc && st.project?.meta.demo?.id !== sc && st.scenarios?.demos.demos.some((d) => d.id === sc)) st.loadDemo(sc);
+      else if (rc) st.loadRecipe(rc);
       else if (m && st.meta?.examples?.[m[1]]) st.loadExample(m[1]);
     };
     window.addEventListener("hashchange", onHash);
@@ -283,6 +291,14 @@ export default function App() {
   }, []);
 
   if (!s.project) return <Boot error={s.toast?.error ? s.toast.text : null} />;
+  if (s.present) {
+    return (
+      <>
+        <Presenter />
+        {s.toast && <div className={`toast${s.toast.error ? " error" : ""}`} role="status">{s.toast.text}</div>}
+      </>
+    );
+  }
   const errors = s.issues.filter((i) => i.level === "error").length;
   const warnings = s.issues.filter((i) => i.level === "warning").length;
   const dock = expert || SIMPLE_TABS.includes(s.dock) ? s.dock : "decision";
@@ -352,12 +368,15 @@ export default function App() {
             <span className="spacer" />
             {details && s.selection.kind !== "project" && <button className="btn ghost" onClick={() => s.select({ kind: "project" })}>Project</button>}
           </div>
-          <div className="panel-body">{details ? <Inspector /> : <PlayPanel onDetails={() => setDetails(true)} onDemos={() => setDemos(true)} onEdit={(r) => setBuilder({ initial: r })} />}</div>
+          <div className="panel-body">{details ? <Inspector /> : <PlayPanel onDetails={() => setDetails(true)} onDemos={() => setDemos(true)} onEdit={(r) => setBuilder({ initial: r })}
+            onChart={() => setChart(true)} />}</div>
         </div>
       </div>
       {welcome && <StartScreen onClose={closeWelcome} onBuild={() => setBuilder({ initial: null })} onDemos={() => setDemos(true)}
         onEdit={(r) => setBuilder({ initial: r })} />}
-      {demos && <DemoDialog onClose={() => setDemos(false)} onEdit={(r) => setBuilder({ initial: r })} />}
+      {demos && <DemoDialog onClose={() => setDemos(false)} onEdit={(r) => setBuilder({ initial: r })} onReport={() => setReport(true)} />}
+      {report && <ReportDialog onClose={() => setReport(false)} />}
+      {chart && <ChartDialog onClose={() => setChart(false)} />}
       {builder && <ScenarioDialog initial={builder.initial} onClose={() => setBuilder(false)} />}
       {s.toast && <div className={`toast${s.toast.error ? " error" : ""}`} role="status">{s.toast.text}</div>}
     </div>

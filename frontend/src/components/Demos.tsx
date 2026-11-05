@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store";
 import type { DemoInfo, Recipe } from "../types";
+import { copyText, recipeLink, scenarioLink } from "../links";
 import { myRecipes, saveMyRecipes } from "./ScenarioDialog";
 
 type Entry = { key: string; title: string; who?: string; expect?: string; recipe: Recipe; demo?: string; section: string };
@@ -78,8 +79,15 @@ export function ScenarioList({ onPicked, onEdit, compact }: { onPicked: () => vo
 }
 
 /** The scenario gallery as a dialog. */
-export function DemoDialog({ onClose, onEdit }: { onClose: () => void; onEdit: (r: Recipe) => void }) {
+export function DemoDialog({ onClose, onEdit, onReport }: { onClose: () => void; onEdit: (r: Recipe) => void; onReport: () => void }) {
   const n = useStore((s) => s.scenarios?.demos.demos.length ?? 0);
+  const sections = useStore((s) => s.scenarios?.demos.sections ?? {});
+  const [show, setShow] = useState("all");
+  const present = () => {
+    onClose();
+    const ids = show === "all" ? "all" : (useStore.getState().scenarios?.demos.demos ?? []).filter((d) => d.section === show).map((d) => d.id);
+    useStore.getState().startPresentation(ids);
+  };
   return (
     <div className="dialog-backdrop" onClick={onClose}>
       <div className="dialog demos" role="dialog" aria-labelledby="demos-title" onClick={(e) => e.stopPropagation()} data-testid="demo-dialog">
@@ -87,9 +95,18 @@ export function DemoDialog({ onClose, onEdit }: { onClose: () => void; onEdit: (
         <p>{n} ready-made cases, each a standard setup plus a few twists. Click one to run it, then press
           <b> Play 100 rounds</b> for the pass rate. <b>Edit</b> opens it in the builder.</p>
         <ScenarioList onPicked={onClose} onEdit={onEdit} />
-        <div className="row" style={{ marginTop: 12 }}>
+        <div className="row demo-dialog-actions" style={{ marginTop: 12 }}>
           <button className="btn" onClick={() => { onClose(); onEdit({ base: { dim: 1, who: "honest" }, twists: [] }); }}>
             New scenario…</button>
+          <span className="present-pick">
+            <select className="select" value={show} onChange={(e) => setShow(e.target.value)} aria-label="Scenarios to present">
+              <option value="all">All {n}</option>
+              {Object.entries(sections).map(([k, v]) => <option key={k} value={k}>{k}: {v}</option>)}
+            </select>
+            <button className="btn" onClick={present} data-testid="btn-present" title="Show the scenarios one by one, full screen">Present</button>
+          </span>
+          <button className="btn" onClick={() => { onClose(); onReport(); }} data-testid="btn-report"
+            title="Run every scenario and save a table of measured against expected pass rates">Report…</button>
           <span className="grow" />
           <button className="btn" onClick={onClose}>Close</button>
         </div>
@@ -99,13 +116,16 @@ export function DemoDialog({ onClose, onEdit }: { onClose: () => void; onEdit: (
 }
 
 /** Shown in the Play panel while a recipe-built scenario is loaded: what it is, what to watch, what to expect. */
-export function DemoCard({ demo, onBrowse, onEdit }: { demo: DemoInfo; onBrowse: () => void; onEdit?: () => void }) {
+export function DemoCard({ demo, recipe, onBrowse, onEdit, onChart }: {
+  demo: DemoInfo; recipe?: Recipe; onBrowse: () => void; onEdit?: () => void; onChart?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
-  const link = demo.id ? `${window.location.origin}${window.location.pathname}#scenario=${demo.id}` : null;
+  // a gallery scenario gets a short link; anything else carries its whole recipe in the link
+  const link = demo.id ? scenarioLink(demo.id) : recipe ? recipeLink(recipe) : null;
   const copy = async () => {
     if (!link) return;
-    try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }
-    catch { useStore.getState().setToast(link); }
+    if (await copyText(link)) { setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    else useStore.getState().setToast(link);
   };
   return (
     <div className="demo-card" data-testid="demo-card">
@@ -117,7 +137,8 @@ export function DemoCard({ demo, onBrowse, onEdit }: { demo: DemoInfo; onBrowse:
       {demo.expect && <p className="demo-expect-line"><b>Expected:</b> {demo.expect}</p>}
       <div className="row demo-actions">
         {onEdit && <button className="btn ghost" onClick={onEdit} data-testid="demo-edit">Change it…</button>}
-        {link && <button className="btn ghost" onClick={copy} title={link}>{copied ? "Link copied" : "Copy link"}</button>}
+        {link && <button className="btn ghost" onClick={copy} title={link} data-testid="demo-copy-link">{copied ? "Link copied" : "Copy link"}</button>}
+        {onChart && <button className="btn ghost" onClick={onChart} data-testid="demo-chart">Chart…</button>}
         <button className="btn ghost" onClick={onBrowse}>All scenarios…</button>
       </div>
     </div>

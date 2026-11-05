@@ -1,4 +1,4 @@
-import type { Analysis, Issue, LightGrid, LightPoint, PortKinds, Project, ScenarioCatalog, SimState } from "./types";
+import type { Analysis, Issue, LightGrid, LightPoint, PortKinds, Project, ReportRow, ScenarioCatalog, SimState, TheoryResult } from "./types";
 
 // Two transports for the same API: HTTP to `qpv serve`, or (static GitHub Pages
 // build, VITE_BACKEND=pyodide) the Python engine running in a Web Worker.
@@ -107,6 +107,13 @@ export const api = {
   attack: (attack: string, policy?: string) => req<ProjectResponse>("POST", "/api/qpv/attack", { attack, policy }),
   autowire: () => req<ProjectResponse>("POST", "/api/qpv/autowire"),
   lightPoint: (point: number[], tau_ns?: number) => req<LightPoint>("POST", "/api/qpv/lightcone", { point, tau_ns }),
+  theory: (preset: string, values: number[]) => req<TheoryResult>("POST", "/api/qpv/theory", { preset, values }),
+  reportRow: (id: string, rounds: number, seed?: number) => req<ReportRow>("POST", "/api/qpv/report", { id, rounds, seed }),
+  reportRender: async (rows: ReportRow[], format: "md" | "csv" | "html") => {
+    const r = await call("POST", "/api/qpv/report/render", { rows, format });
+    if (r.status >= 400) throw new Error(r.body?.detail ?? "could not render the report");
+    return String(r.body);
+  },
   lightGrid: (body: { n?: number; tau_ns?: number; z?: number; bounds?: number[][] }) =>
     req<LightGrid>("POST", "/api/qpv/lightcone", body),
 };

@@ -637,3 +637,54 @@ svg .tick { font-family: var(--font-code); font-size: 10px; fill: var(--ink-3); 
 .demo-card:has(.demo-who.honest) { border-left-color: var(--prover); }
 .demo-card:has(.demo-who.cheat) { border-left-color: var(--adversary); }
 .demo-section h3 .demo-letter { background: var(--verifier); }
+
+/* ------------------------------------------------------------ presentation mode */
+.presenter { position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column; background: var(--paper); }
+.presenter-bar { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--rule); background: var(--panel); flex-wrap: wrap; }
+.presenter-bar .btn { height: 32px; font-size: var(--fs-m); }
+.presenter-count { font-family: var(--font-code); font-weight: 600; }
+.presenter-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); }
+.presenter-card { overflow: auto; padding: 22px 24px; border-right: 1px solid var(--rule); background: var(--panel); display: flex; flex-direction: column; gap: 14px; }
+.presenter-card h1 { margin: 0; font-size: 26px; line-height: 1.2; letter-spacing: -0.01em; }
+.presenter-card .demo-who { align-self: flex-start; font-size: var(--fs-s); }
+.presenter-watch { margin: 0; font-size: 16px; line-height: 1.55; color: var(--ink-2); }
+.presenter-round { padding: 12px 14px; border-radius: var(--r-m); background: var(--sunken); display: flex; flex-direction: column; gap: 2px; }
+.presenter-round b { font-size: 22px; }
+.presenter-round.accept { background: var(--prover-soft); color: var(--accept); }
+.presenter-round.reject { background: var(--adversary-soft); color: var(--reject); }
+.presenter-score { display: flex; flex-direction: column; gap: 8px; }
+.presenter-score b.ok { color: var(--accept); }
+.presenter-score b.bad { color: var(--reject); }
+.presenter-bar-chart { position: relative; height: 16px; border-radius: 8px; background: var(--sunken); overflow: hidden; }
+.presenter-bar-chart .measured { position: absolute; left: 0; top: 4px; bottom: 4px; border-radius: 4px; background: var(--ink); transition: width 0.4s ease; }
+.presenter-bar-chart .expected { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--warn) 45%, transparent); }
+.presenter-numbers { display: flex; gap: 28px; }
+.presenter-numbers div { display: flex; flex-direction: column; }
+.presenter-numbers b { font-size: 30px; font-variant-numeric: tabular-nums; }
+.presenter-score p { margin: 0; color: var(--ink-2); line-height: 1.5; }
+.presenter-test { padding: 8px 10px; border-radius: var(--r-s); background: var(--verifier-soft); color: var(--ink) !important; }
+.presenter-view { position: relative; min-width: 0; min-height: 0; display: flex; }
+@media (max-width: 860px) {
+  .presenter-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(320px, 1fr); overflow: auto; }
+  .presenter-card { border-right: none; border-bottom: 1px solid var(--rule); }
+}
+@media (prefers-reduced-motion: reduce) { .presenter-bar-chart .measured { transition: none; } }
+
+/* ------------------------------------------------------------ report, chart, many-round test */
+.dialog.report, .dialog.chart-dialog { width: min(820px, calc(100vw - 32px)); }
+.report-controls .input { width: 90px; }
+.report-summary { margin: 8px 0; font-size: var(--fs-m); }
+.report-table { max-height: 46vh; overflow: auto; border: 1px solid var(--rule); border-radius: var(--r-m); }
+.report-table table.grid { min-width: 560px; }
+.report-table td.good { color: var(--accept); font-weight: 600; }
+.report-table td.bad { color: var(--reject); font-weight: 600; }
+.report-table tr.warn td { background: var(--adversary-soft); }
+.chart-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 8px; }
+.chart-controls label { display: flex; flex-direction: column; gap: 3px; color: var(--ink-2); }
+.chart-controls .input { width: 84px; }
+.chart-controls .select { min-width: 220px; }
+.chart.wide { max-width: none; }
+.play-test { font-size: var(--fs-s); line-height: 1.45; padding: 6px 8px; border-radius: var(--r-s); background: var(--verifier-soft); }
+.demo-dialog-actions { flex-wrap: wrap; }
+.present-pick { display: inline-flex; gap: 4px; align-items: center; }
+.present-pick .select { width: auto; max-width: 220px; }
