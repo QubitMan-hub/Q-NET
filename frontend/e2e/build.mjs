@@ -111,8 +111,19 @@ const v = (await api("/api/project")).issues.filter((i) => i.level === "error");
 check(v.length === 0, `project built in the editor validates (${v.map((i) => i.message).join("; ")})`);
 await page.screenshot({ path: `${SHOTS}/10-built-network.png` });
 
+// Run plays the round out over a few seconds; wait until the engine has finished it.
+async function runRound() {
+  await page.click('[data-testid="btn-run"]');
+  for (let i = 0; i < 200; i++) {
+    if ((await api("/api/sim/state")).stopped) break;
+    await page.waitForTimeout(100);
+  }
+  await page.waitForTimeout(300);
+}
+
+
 // --- run it
-await page.click('[data-testid="btn-run"]');
+await runRound();
 await settle();
 let st = await api("/api/sim/state");
 check(st.stopped && st.decision.outcome === "accept", `GUI-built QPV_BB84 runs in the engine and accepts (${st.decision.summary})`);
@@ -143,7 +154,7 @@ const aut2 = proj.automata[proj.participants.find((p) => p.id === "P").automaton
 check(aut2.transitions.some((t) => t.from === "waiting" && t.to === "state"), "transition drawn between states reached the engine project");
 // An 'auto' transition with guard true fires as soon as the prover starts (t = 0), before any
 // challenge arrives: the prover deadlocks in the new state and both verifiers time out.
-await page.click('[data-testid="btn-run"]');
+await runRound();
 await settle();
 st = await api("/api/sim/state");
 const pHist = st.nodes.P.history;
@@ -152,7 +163,7 @@ check(st.decision.outcome === "reject" && st.nodes.P.state === "state" && pHist[
 check(st.decision.verifiers.every((x) => x.category === "timeout"), "both verifiers reject by timeout");
 await page.keyboard.press("Control+z");
 await settle();
-await page.click('[data-testid="btn-run"]');
+await runRound();
 await settle();
 st = await api("/api/sim/state");
 check(st.decision.outcome === "accept", "undoing the transition restores acceptance");

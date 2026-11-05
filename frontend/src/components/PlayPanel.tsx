@@ -34,6 +34,7 @@ const OUTCOME: Record<string, string> = { wrong_answer: "wrong answers", timeout
 function headline(outcome: string, who: string) {
   if (outcome === "accept") return cheating(who) ? "Fooled! The cheaters passed as the prover." : "Accepted. The prover is where it claims.";
   if (outcome === "reject") return cheating(who) ? "Caught! The verifiers spotted the cheaters." : who === "displaced" ? "Caught! The prover is not where it claims." : "Rejected.";
+  if (outcome === "running") return "Watch the qubit and the basis travel…";
   return "Ready. Play a round to see what happens.";
 }
 
@@ -62,10 +63,11 @@ export function PlayPanel({ onDetails, onDemos, onEdit, onChart }: {
     useStore.getState().setView("spacetime");
   });
   const pickWho = (w: string) => (analysis?.qpv ? act(() => useStore.getState().switchAttack(w)) : build(2, w));
+  const playing = useStore((s) => s.playing);
   const again = () => act(async () => {
     const s = useStore.getState();
     await s.reset(Math.floor(Math.random() * 1e9));
-    await useStore.getState().runToEnd();
+    await useStore.getState().animateRound();
   });
   const hundred = () => {
     setScoreRev(revision);
@@ -73,7 +75,7 @@ export function PlayPanel({ onDetails, onDemos, onEdit, onChart }: {
       .catch((e) => setToast(String(e.message), true));
   };
 
-  const outcome = sim?.decision.outcome ?? "pending";
+  const outcome = playing ? "running" : sim?.decision.outcome ?? "pending";
   const verdicts = sim?.decision.verifiers ?? [];
   const why = (verdicts.find((v: any) => v.verdict === "reject") ?? verdicts[0])?.sentence;
   const score = scoreRev === revision ? job?.result?.points?.[0]?.summary : null;
@@ -123,8 +125,10 @@ export function PlayPanel({ onDetails, onDemos, onEdit, onChart }: {
         {why && outcome !== "pending" && <div className="play-why">{why}</div>}
       </div>
       <div className="row">
-        <button className="btn primary grow" disabled={busy} onClick={outcome === "pending" ? () => act(() => useStore.getState().runToEnd()) : again}
-          data-testid="play-round">{outcome === "pending" ? "Play a round" : "Play another round"}</button>
+        {playing
+          ? <button className="btn primary grow" onClick={() => useStore.getState().runToEnd()} data-testid="play-round">Skip to end</button>
+          : <button className="btn primary grow" disabled={busy} onClick={outcome === "pending" ? () => act(() => useStore.getState().animateRound()) : again}
+            data-testid="play-round">{outcome === "pending" ? "Play a round" : "Play another round"}</button>}
         <button className="btn grow" disabled={busy || job?.status === "running"} onClick={hundred} data-testid="play-hundred">Play 100 rounds</button>
       </div>
       {scoreRev === revision && job && (

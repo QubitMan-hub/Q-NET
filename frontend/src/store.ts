@@ -73,7 +73,9 @@ interface Store {
   step(n?: number): Promise<void>;
   runToEnd(): Promise<void>;
   runUntil(ns: number): Promise<void>;
-  setPlaying(on: boolean): void;
+  setPlaying(on: boolean, rate?: number): void;
+  /** Play the current round out in real time (about `seconds` from the first challenge to the last deadline). */
+  animateRound(seconds?: number): Promise<void>;
   consoleExec(line: string): Promise<void>;
   clearConsole(): void;
   select(sel: Selection): void;
@@ -301,7 +303,7 @@ export const useStore = create<Store>((set, get) => {
       });
     },
 
-    setPlaying(on) {
+    setPlaying(on, rate) {
       set({ playing: on });
       window.clearInterval(playTimer);
       if (!on) return;
@@ -317,7 +319,7 @@ export const useStore = create<Store>((set, get) => {
         inflight = true;
         try {
           // The engine advances its own clock to `until`; the UI only paces requests.
-          const until = st.sim.now_fs / 1e6 + (st.playRate * tickMs) / 1000;
+          const until = st.sim.now_fs / 1e6 + ((rate ?? st.playRate) * tickMs) / 1000;
           const since = st.sim.trace.length;
           await mergeSim(await api.run(since, until), since);
         } catch (e: any) {
@@ -327,6 +329,22 @@ export const useStore = create<Store>((set, get) => {
           inflight = false;
         }
       }, tickMs);
+    },
+
+    async animateRound(seconds = 4) {
+      await guard(async () => {
+        if (get().dirtyPush) await pushNow();
+        const st = get();
+        if (!st.sim || st.sim.stopped) return;
+        const rows = st.analysis?.timing.rows ?? [];
+        const first = rows.length ? Math.min(...rows.map((r) => r.send_fs)) : st.sim.now_fs;
+        const last = rows.length ? Math.max(...rows.map((r) => r.deadline_fs)) : st.sim.now_fs + 40e6;
+        // skip the quiet time before the first challenge leaves, then play the round out in real time
+        const startNs = Math.max(st.sim.now_fs, first - 1e6) / 1e6;
+        if (startNs > st.sim.now_fs / 1e6) await get().runUntil(startNs);
+        const spanNs = Math.max(1, last / 1e6 - startNs + 1);
+        get().setPlaying(true, spanNs / seconds);
+      });
     },
 
     async consoleExec(line) {

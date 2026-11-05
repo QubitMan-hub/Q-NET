@@ -99,7 +99,10 @@ function Toolbar({ panels }: { panels: Panels }) {
           {[0.5, 1, 2, 4, 10, 25].map((r) => <option key={r} value={r}>{r} ns/s</option>)}
         </select>
         </>}
-        <button className="btn primary" title="Run to completion (E)" disabled={!sim || sim.stopped} onClick={() => s.runToEnd()} data-testid="btn-run"><Icon.end /><span className="lbl lbl-keep">Run</span></button>
+        {s.playing
+          ? <button className="btn primary" title="Skip to the end of the round (E)" onClick={() => s.runToEnd()} data-testid="btn-run"><Icon.end /><span className="lbl lbl-keep">Skip to end</span></button>
+          : <button className="btn primary" title="Play the round: watch the qubit and the basis travel (E skips to the end)" disabled={!sim || sim.stopped}
+            onClick={() => s.animateRound()} data-testid="btn-run"><Icon.play /><span className="lbl lbl-keep">Run</span></button>}
       </div>
       <div className="clock" title="Global simulation time (engine clock)">
         <span className="t" data-testid="clock">{sim ? nsLabel(sim.now_fs, 6) : "—"}</span>

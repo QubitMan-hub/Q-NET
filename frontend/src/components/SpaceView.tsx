@@ -248,9 +248,16 @@ export function SpaceView({ mode }: { mode: "map" | "3d" }) {
           const end = m.arrival_time_fs ?? m.depart_time_fs! + (m.delay_fs ?? 1);
           const f = Math.min(1, (now - m.depart_time_fs!) / Math.max(1, end - m.depart_time_fs!));
           const [a, b] = [S(positions[m.src]), S(positions[m.dst])];
-          return <circle key={m.id} cx={a[0] + (b[0] - a[0]) * f} cy={a[1] + (b[1] - a[1]) * f} r={5}
-            fill={m.kind === "quantum" ? "var(--quantum)" : "var(--classical)"} stroke="var(--panel)" strokeWidth={1.5}
-            style={{ cursor: "pointer" }} onClick={() => select({ kind: "message", id: m.id })} />;
+          const cx = a[0] + (b[0] - a[0]) * f, cy = a[1] + (b[1] - a[1]) * f;
+          const color = m.kind === "quantum" ? "var(--quantum)" : "var(--classical)";
+          const name = m.kind === "quantum" ? "qubit" : m.tag === "theta" ? "basis" : m.tag;
+          return (
+            <g key={m.id} style={{ cursor: "pointer" }} onClick={() => select({ kind: "message", id: m.id })} data-testid={`flight-${m.id}`}>
+              <circle cx={cx} cy={cy} r={m.kind === "quantum" ? 7 : 5} fill={color} stroke="var(--panel)" strokeWidth={1.5} />
+              <text x={cx} y={cy - 10} textAnchor="middle" fontSize={11} fontWeight={600} fill={color}
+                paintOrder="stroke" stroke="var(--paper)" strokeWidth={3}>{name}</text>
+            </g>
+          );
         })}
         {(() => { const [x, y] = S(claim); return (
           <g pointerEvents="none"><path d={`M ${x - 7} ${y} h 14 M ${x} ${y - 7} v 14`} stroke="var(--prover)" strokeWidth={1.5} />

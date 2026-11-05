@@ -47,8 +47,19 @@ let st = await api("/api/sim/state");
 check(st.events_executed === 5, `engine executed exactly 5 events after 5 UI steps (got ${st.events_executed})`);
 check((await page.textContent('[data-testid="clock"]')).trim() === fmt(st.now_fs), "UI clock equals engine clock after stepping");
 
+// Run plays the round out over a few seconds; wait until the engine has finished it.
+async function runRound() {
+  await page.click('[data-testid="btn-run"]');
+  for (let i = 0; i < 200; i++) {
+    if ((await api("/api/sim/state")).stopped) break;
+    await page.waitForTimeout(100);
+  }
+  await page.waitForTimeout(300);
+}
+
+
 // Run to completion
-await page.click('[data-testid="btn-run"]');
+await runRound();
 await page.waitForTimeout(500);
 st = await api("/api/sim/state");
 check(st.stopped && st.decision.outcome === "accept", "engine run finished with ACCEPT for the honest prover");
@@ -92,7 +103,7 @@ await input.press("Enter");
 await page.waitForTimeout(700);
 const proj = await api("/api/project");
 check(proj.project.participants.find((p) => p.id === "P").processing_ns === 0.9, "inspector edit reached the engine project");
-await page.click('[data-testid="btn-run"]');
+await runRound();
 await page.waitForTimeout(500);
 st = await api("/api/sim/state");
 check(st.decision.outcome === "reject", "engine rejects when processing exceeds tolerance");
@@ -102,7 +113,7 @@ check((await page.textContent('[data-testid="outcome"]')).trim() === "rejected",
 await page.click("body", { position: { x: 5, y: 900 } }).catch(() => {});
 await page.keyboard.press("Control+z");
 await page.waitForTimeout(700);
-await page.click('[data-testid="btn-run"]');
+await runRound();
 await page.waitForTimeout(500);
 st = await api("/api/sim/state");
 check(st.decision.outcome === "accept", "undo restores the accepted configuration");
@@ -141,7 +152,7 @@ await page.screenshot({ path: `${SHOTS}/06-experiments.png` });
 
 // Spacetime of the attack, timeline and decision panels
 await page.keyboard.press("3");
-await page.click('[data-testid="btn-run"]');
+await runRound();
 await page.waitForTimeout(500);
 await page.click('[data-testid="dock-timeline"]');
 await page.waitForTimeout(300);
