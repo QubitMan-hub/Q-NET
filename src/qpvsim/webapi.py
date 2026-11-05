@@ -29,6 +29,8 @@ from .protocol.capabilities import ROLE_PROFILES, profile_catalog
 from .protocol.expr import ENGINE_FUNCTIONS, PURE_FUNCTIONS
 from .protocol.project import normalize, participant, validate_project, verifier_ids, verifier_type
 from .qpv import lightcone, presets, recipe, scenario
+from .qpv import report as qreport
+from .qpv import rounds as qrounds
 from .qpv import timing as qtiming
 from .qpv.automata import COMBINES
 from .qpv.geometry import dimension
@@ -82,6 +84,10 @@ class WebAPI:
         R("POST", r"/api/qpv/attack", self.qpv_attack)
         R("POST", r"/api/qpv/autowire", self.qpv_autowire)
         R("POST", r"/api/qpv/lightcone", self.qpv_lightcone)
+        R("POST", r"/api/qpv/theory", self.qpv_theory)
+        R("POST", r"/api/qpv/rounds", self.qpv_rounds)
+        R("POST", r"/api/qpv/report", self.qpv_report_row)
+        R("POST", r"/api/qpv/report/render", self.qpv_report_render)
         R("POST", r"/api/experiments", self.start_experiment)
         R("GET", r"/api/experiments/(?P<job>\w+)", self.get_experiment)
         R("POST", r"/api/experiments/(?P<job>\w+)/cancel", self.cancel_experiment)
@@ -213,6 +219,35 @@ class WebAPI:
             return self.ok(lightcone.point(p, body["point"], body.get("tau_ns")))
         n = min(MAX_GRID, max(2, int(body.get("n", 96))))
         return self.ok(lightcone.grid(p, n, body.get("tau_ns"), body.get("z"), body.get("bounds")))
+
+    def qpv_theory(self, body=None, **_) -> Result:
+        body = body or {}
+        name = str(body.get("preset", ""))
+        if name not in presets.PRESETS:
+            raise ValueError(f"unknown preset {name!r}; choose from {', '.join(presets.PRESETS)}")
+        return self.ok(presets.theory(self.session.project, name, list(body.get("values") or [])))
+
+    def qpv_rounds(self, body=None, **_) -> Result:
+        body = body or {}
+        out = {}
+        if body.get("test"):
+            out["pass_probability"] = qrounds.pass_probability(body["test"], float(body.get("correct", 1.0)),
+                                                               float(body.get("lost", 0.0)))
+        if body.get("p_honest") is not None and body.get("p_cheat") is not None:
+            out["needed"] = qrounds.rounds_needed(float(body["p_honest"]), float(body["p_cheat"]),
+                                                  float(body.get("risk", 1e-6)))
+        return self.ok(out)
+
+    def qpv_report_row(self, body=None, **_) -> Result:
+        body = body or {}
+        try:
+            return self.ok(qreport.row(str(body.get("id", "")), int(body.get("rounds", 300)), int(body.get("seed", 11))))
+        except KeyError:
+            raise NotFound("no such demo scenario") from None
+
+    def qpv_report_render(self, body=None, **_) -> Result:
+        body = body or {}
+        return 200, qreport.render(list(body.get("rows") or []), str(body.get("format", "md"))), "text"
 
     # ------------------------------------------------------------ simulation
     def reset(self, body=None, **_) -> Result:

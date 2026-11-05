@@ -60,6 +60,18 @@ def main(argv=None) -> int:
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--save", help="also write the built project here (open it with 'qpv serve <file>')")
 
+    p = sub.add_parser("report", help="run every gallery scenario and write a report of measured vs expected pass rates")
+    p.add_argument("--rounds", type=int, default=300, help="rounds per scenario (default 300)")
+    p.add_argument("--seed", type=int, default=11)
+    p.add_argument("--only", nargs="*", help="only these scenario ids")
+    p.add_argument("--format", choices=["md", "csv", "html"], help="default: from the --out extension, else md")
+    p.add_argument("--out", help="write the report here (default: print it)")
+
+    p = sub.add_parser("rounds", help="how many rounds separate an honest prover from a cheater")
+    p.add_argument("--honest", type=float, required=True, help="honest prover's per-round pass rate, e.g. 0.98")
+    p.add_argument("--cheat", type=float, required=True, help="best cheater's per-round pass rate, e.g. 0.854")
+    p.add_argument("--risk", type=float, default=1e-6, help="allowed chance of either mistake (default 1e-6)")
+
     sub.add_parser("examples", help="list bundled examples")
     p = sub.add_parser("export-examples", help="write the bundled example projects to a directory")
     p.add_argument("directory")
@@ -78,6 +90,30 @@ def main(argv=None) -> int:
             import webbrowser
             threading.Timer(1.0, lambda: webbrowser.open(url)).start()
         uvicorn.run(create_app(_session(a.project)), host=a.host, port=a.port, log_level="warning")
+        return 0
+    if a.cmd == "report":
+        from .qpv import report as qreport
+        fmt = a.format or (Path(a.out).suffix.lstrip(".").replace("markdown", "md") if a.out else "md")
+        fmt = {"htm": "html", "txt": "md"}.get(fmt, fmt)
+        rows = qreport.report(a.rounds, a.only, a.seed,
+                              progress=lambda i, n, d: print(f"\r[{i + 1}/{n}] {d:<26}", end="", file=sys.stderr))
+        print(file=sys.stderr)
+        text = qreport.render(rows, fmt)
+        if a.out:
+            Path(a.out).write_text(text)
+            print(f"{sum(r['ok'] for r in rows)} of {len(rows)} scenarios match; report written to {a.out}")
+        else:
+            print(text, end="")
+        return 0 if all(r["ok"] for r in rows) else 3
+    if a.cmd == "rounds":
+        from .qpv import rounds as qrounds
+        r = qrounds.rounds_needed(a.honest, a.cheat, a.risk)
+        if r is None:
+            print("No number of rounds separates them: the honest pass rate must be above the cheater's.")
+            return 1
+        print(f"{r['rounds']} rounds, accepting with at least {r['pass_mark']} right ({100 * r['min_correct']:.1f}%):\n"
+              f"  honest prover fails with probability {r['honest_fails']:.2e}\n"
+              f"  cheater passes with probability {r['cheater_passes']:.2e}")
         return 0
     if a.cmd == "scenarios":
         from .qpv import recipe
@@ -194,11 +230,18 @@ def _run_scenario(a) -> int:
     print(title)
     if doc["meta"].get("description"):
         print("  " + doc["meta"]["description"])
-    res = run_experiment(doc, {"runs": a.rounds, "seed": a.seed})["points"][0]["summary"]
+    runs = (d.get("runs") if not a.scenario.endswith(".json") else None) or a.rounds
+    res = run_experiment(doc, {"runs": runs, "seed": a.seed})["points"][0]["summary"]
     acc = res["acceptance"]
     print(f"\nPassed {res['accepted']} of {res['n']} rounds ({100 * acc['p']:.1f}%, 95% CI {100 * acc['lo']:.1f}-{100 * acc['hi']:.1f}%)")
     for vid, v in res["verifiers"].items():
         print(f"  {vid}: " + ", ".join(f"{n} {k.replace('_', ' ')}" for k, n in v["categories"].items()))
+    if res.get("test"):
+        from .qpv.rounds import describe
+        t = res["test"]
+        print(f"Judged over {t['rounds']} rounds (at least {100 * t['min_answered']:.0f}% answered, "
+              f"{100 * t['min_correct']:.0f}% of those right): passes {describe(t['pass_probability'])}"
+              + (f"; {t['blocks_passed']} of {t['blocks']} recorded blocks of {t['rounds']} passed" if t["blocks"] else ""))
     if expect:
         print(f"Expected: {expect}")
     if a.save:

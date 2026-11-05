@@ -35,6 +35,7 @@ E_j talks to its verifier on ``verifier`` and to attacker E_i on ``p{i}``.
 
 from __future__ import annotations
 
+import copy
 from typing import Any, Dict, List
 
 REF_BB84 = [
@@ -73,6 +74,19 @@ def _send_all(ports: List[str], tag: str, value: str) -> List[Dict[str, Any]]:
     return [{"op": "send", "port": p, "tag": tag, "value": value} for p in ports]
 
 
+def keyed(value: str) -> str:
+    """An answer expression that carries the shared key when verifiers demand one (key_bits > 0); use it after
+    :data:`KEY_PICK`, which sets ``k`` to the key, or to one guess of it for a party without the key."""
+    return f"{value} if key_bits == 0 else [{value}, k]"
+
+
+KEY_PICK = {"op": "set", "var": "k", "expr": "key if key else rand_bits(key_bits)"}
+
+
+KEY_PARAM = {"key_bits": {"default": 0, "min": 0,
+                          "description": "Bits of shared key to attach to each answer; set with the verifiers'."}}
+
+
 # ================================================================ verifiers
 def _verifier(kind: str, emit: List[Dict[str, Any]], description: str, params: Dict[str, Any]) -> Dict[str, Any]:
     deadline_ns = "str(round(deadline_fs / 1e6, 6))"
@@ -82,7 +96,7 @@ def _verifier(kind: str, emit: List[Dict[str, Any]], description: str, params: D
     return _automaton(
         f"qpv_verifier_{kind}", "verifier",
         description + " Times its signal to reach the claimed position at the meeting time t_meet and accepts "
-                      "iff the answer equals x and arrives by t_meet + d(V, claim)/c + tolerance (local clock, "
+                      "iff the answer equals x (with the shared key, when key_bits > 0) and arrives by t_meet + d(V, claim)/c + tolerance (local clock, "
                       "integer fs). t_meet is t_ref, moved later when the farthest verifier could only make "
                       "t_ref by sending before t = 0. extra_delay_ns compensates a slower path; with allow_loss_reports a "
                       "'nophoton' reply ends the round as lost.",
@@ -91,6 +105,7 @@ def _verifier(kind: str, emit: List[Dict[str, Any]], description: str, params: D
             {"id": "arm", "from": "idle", "to": "armed", "trigger": {"type": "start"}, "label": "schedule challenge",
              "duration_ns": 0, "actions": [
                  {"op": "set", "var": "t_meet_fs", "expr": "max(fs(t_ref_ns), max_claim_travel_fs + fs(1))"},
+                 {"op": "set", "var": "expected", "expr": "x if key_bits == 0 else [x, key]"},
                  {"op": "record", "key": "meeting_ns", "value": "t_meet_fs / 1e6"},
                  {"op": "set", "var": "deadline_fs",
                   "expr": "t_meet_fs + claim_travel_fs + fs(extra_delay_ns) + fs(tolerance_ns)"},
@@ -103,7 +118,8 @@ def _verifier(kind: str, emit: List[Dict[str, Any]], description: str, params: D
                  {"op": "timer", "name": "deadline", "at_fs": "deadline_fs"}]},
             {"id": "accept", "from": "waiting", "to": "accepted",
              "trigger": {"type": "receive", "tags": ["answer"], "port": "prover"},
-             "guard": "msg.value == x and msg.time_fs <= deadline_fs", "label": "correct & on time",
+             "guard": "msg.value == expected and msg.time_fs <= deadline_fs",
+             "label": "correct & on time",
              "duration_ns": 0, "actions": record + [
                  {"op": "verdict", "outcome": "accept",
                   "reason": "'correct answer ' + str(msg.value) + ' received at ' + str(round(msg.time, 6)) + "
@@ -138,9 +154,12 @@ def _verifier(kind: str, emit: List[Dict[str, Any]], description: str, params: D
                 "allow_loss_reports": {"default": False,
                                        "description": "Accept a 'nophoton' reply as a lost round instead of waiting "
                                                       "for an answer."},
+                "key_bits": {"default": 0, "min": 0,
+                             "description": "Answers must carry the round's shared secret key of this many bits "
+                                          "(0 = no key). The key is shared out of band with the genuine prover."},
                 **params},
-        variables={"x": 0, "shares": [0], "t_meet_fs": 0, "deadline_fs": 0, "sent_at": 0.0},
-        port_kinds={"prover": ["quantum", "classical"] if kind == "quantum" else ["classical"]})
+        variables={"x": 0, "shares": [0], "t_meet_fs": 0, "deadline_fs": 0, "sent_at": 0.0, "key": [], "expected": 0},
+        port_kinds={"prover": ["quantum", "classical"] if kind.startswith("quantum") else ["classical"]})
 
 
 def quantum_verifier() -> Dict[str, Any]:
@@ -159,20 +178,52 @@ def classical_verifier() -> Dict[str, Any]:
 
 
 # ================================================================ honest prover
-def honest_prover(n: int) -> Dict[str, Any]:
+def basis_measure(shares: str, bases: int = 2) -> Dict[str, Any]:
+    """The measure action an honest party uses once it holds all basis shares."""
+    if bases == 2:
+        return {"op": "measure", "qubit": "q", "basis": f"combine(combine, {shares})", "result": "answer"}
+    return {"op": "measure", "qubit": "q", "basis": "'angle'", "angle": f"pi * (sum({shares}) % bases) / (2 * bases)",
+            "result": "answer"}
+
+
+def honest_prover(n: int, bases: int = 2, report_loss: bool = False) -> Dict[str, Any]:
+    """Waits for the qubit and all basis shares, measures and answers every verifier.
+
+    ``bases > 2``: the basis is one of ``bases`` equally spaced bases in the X-Z plane (index = sum of the shares
+    mod bases).  ``report_loss``: if the shares arrive and no photon is detected within a short window, the prover
+    answers 'nophoton' instead of staying silent."""
     ports = [f"v{j}" for j in range(n)]
+    name = f"qpv_prover_{n}v" + (f"_{bases}b" if bases != 2 else "") + ("_reports_loss" if report_loss else "")
+    params = {"combine": {"default": "xor", "description": "Must match the verifiers' combine function."}, **KEY_PARAM}
+    if bases != 2:
+        params["bases"] = {"default": bases, "min": 2, "description": "Number of measurement bases (must match V0)."}
+    answer = [KEY_PICK] + _send_all(ports, "answer", keyed("answer"))
+    transitions = [{"id": "respond", "from": "waiting", "to": "done", "label": "measure & answer",
+                    "trigger": {"type": "receive", "tags": ["q"] + ["theta"] * (n - 1)},
+                    "actions": [basis_measure("received.theta", bases)] + answer}]
+    states = [_state("waiting", "initial", "Await challenges", 0), _state("done", "terminal", "Answered", 160, outcome="done")]
+    variables = {"answer": 0, "key": [], "k": []}
+    if report_loss:
+        params["click_window_ns"] = {"default": 0.01, "min": 0,
+                                     "description": "How long after the shares the detector may still click."}
+        variables["sh"] = [0]
+        transitions += [
+            {"id": "shares_first", "from": "waiting", "to": "listening", "label": "shares here, photon not yet",
+             "trigger": {"type": "receive", "tags": ["theta"] * (n - 1)}, "duration_ns": 0,
+             "actions": [{"op": "set", "var": "sh", "expr": "received.theta"},
+                         {"op": "timer", "name": "click_window", "after_ns": "click_window_ns"}]},
+            {"id": "photon", "from": "listening", "to": "done", "label": "photon clicks: measure & answer",
+             "trigger": {"type": "receive", "tags": ["q"]},
+             "actions": [{"op": "cancel_timer", "name": "click_window"}, basis_measure("sh", bases)] + answer},
+            {"id": "no_click", "from": "listening", "to": "done", "label": "no click: report no photon",
+             "trigger": {"type": "timer", "name": "click_window"}, "actions": _send_all(ports, "nophoton", "0")}]
+        states.insert(1, _state("listening", "normal", "Listening for the photon", 80, x=200))
     return _automaton(
-        f"qpv_prover_{n}v", "prover",
-        f"Honest prover for {n} verifiers: waits for the qubit and all {n - 1} basis shares, measures the "
-        "qubit in basis combine(shares) and sends the outcome to every verifier.",
-        ports,
-        [{"id": "respond", "from": "waiting", "to": "done", "label": "measure & answer",
-          "trigger": {"type": "receive", "tags": ["q"] + ["theta"] * (n - 1)},
-          "actions": [{"op": "measure", "qubit": "q", "basis": "combine(combine, received.theta)", "result": "answer"}]
-          + _send_all(ports, "answer", "answer")}],
-        [_state("waiting", "initial", "Await challenges", 0), _state("done", "terminal", "Answered", 160, outcome="done")],
-        params={"combine": {"default": "xor", "description": "Must match the verifiers' combine function."}},
-        variables={"answer": 0})
+        name, "prover",
+        f"Honest prover for {n} verifiers: waits for the qubit and all {n - 1} basis shares, measures the qubit in "
+        + ("basis combine(shares)" if bases == 2 else f"the shares' basis (one of {bases})")
+        + " and sends the outcome to every verifier" + ("; reports 'nophoton' when nothing clicks." if report_loss else "."),
+        ports, transitions, states, params=params, variables=variables)
 
 
 # ================================================================ attacks
@@ -319,27 +370,34 @@ def adv_split(j: int, n: int) -> Dict[str, Any]:
         variables={"s": 0, "m": 0}, port_kinds=kinds)
 
 
-def adv_lossy(j: int, n: int) -> Dict[str, Any]:
-    """Selective-loss colluders: guess the basis, and report 'no photon' whenever the guess was wrong."""
+def adv_lossy(j: int, n: int, bases: int = 2) -> Dict[str, Any]:
+    """Selective-loss colluders: guess the basis, and report 'no photon' whenever the guess was wrong.
+    With more than two bases the guess is right only 1/bases of the time."""
     partners = [f"p{i}" for i in range(n) if i != j]
     states = [_state("intercept", "initial", "Intercept challenge", 0), _state("relayed", "normal", "Await partners", 130),
               _state("done", "terminal", "Answered", 260, outcome="done")]
     kinds = {"verifier": ["quantum", "classical"] if j == 0 else ["classical"], **{p: ["classical"] for p in partners}}
     others = [f"e{i}" for i in range(n) if i != j]
+    true_basis = (lambda own: f"combine(combine, {_shares_expr(n, own)})") if bases == 2 else \
+        (lambda own: f"sum({_shares_expr(n, own)}) % bases")
     if j == 0:
-        basis, guess, bit = f"combine(combine, {_shares_expr(n, -1)})", "g", "m"
+        basis, guess, bit = true_basis(-1), "g", "m"
+        measure = ({"op": "measure", "qubit": "q", "basis": "g", "result": "m"} if bases == 2 else
+                   {"op": "measure", "qubit": "q", "basis": "'angle'", "angle": "pi * g / (2 * bases)", "result": "m"})
         first = {"id": "guess", "from": "intercept", "to": "relayed", "label": "guess basis & measure",
                  "trigger": {"type": "receive", "tags": ["q"], "port": "verifier"},
-                 "actions": [{"op": "set", "var": "g", "expr": "rand_bit()"},
-                             {"op": "measure", "qubit": "q", "basis": "g", "result": "m"}]
-                 + _send_all(partners, "e0", "[g, m]")}
+                 "actions": [{"op": "set", "var": "g", "expr": "rand_bit()" if bases == 2 else "rand_int(0, bases - 1)"},
+                             measure] + _send_all(partners, "e0", "[g, m]")}
     else:
-        basis, guess, bit = f"combine(combine, {_shares_expr(n, j)})", "msgs.e0.value[0]", "msgs.e0.value[1]"
+        basis, guess, bit = true_basis(j), "msgs.e0.value[0]", "msgs.e0.value[1]"
         first = {"id": "share", "from": "intercept", "to": "relayed", "label": "broadcast share",
                  "trigger": {"type": "receive", "tags": ["theta"], "port": "verifier"},
                  "actions": [{"op": "set", "var": "s", "expr": "msg.value"}] + _send_all(partners, f"e{j}", "s")}
+    params = {"combine": {"default": "xor", "description": "Must match the verifiers' combine function."}}
+    if bases != 2:
+        params["bases"] = {"default": bases, "min": 2, "description": "Number of bases (must match V0)."}
     return _attacker(
-        f"qpv_adv_lossy{j}_{n}v",
+        f"qpv_adv_lossy{j}_{n}v" + (f"_{bases}b" if bases != 2 else ""),
         "Selective-loss colluder: the attacker next to the quantum verifier guesses the basis and measures at once; "
         "once all shares are known, everyone answers if the guess was right and reports 'no photon' otherwise.",
         partners,
@@ -349,19 +407,75 @@ def adv_lossy(j: int, n: int) -> Dict[str, Any]:
           "actions": _send_all(["verifier"], "answer", bit)},
          {"id": "claim_loss", "from": "relayed", "to": "done", "label": "guess was wrong: report no photon",
           "trigger": {"type": "receive", "tags": others}, "actions": _send_all(["verifier"], "nophoton", "0")}],
-        states, params={"combine": {"default": "xor", "description": "Must match the verifiers' combine function."}},
-        variables={"s": 0, "g": 0, "m": 0}, port_kinds=kinds)
+        states, params=params, variables={"s": 0, "g": 0, "m": 0}, port_kinds=kinds)
 
 
-def multi_photon_verifier(k: int) -> Dict[str, Any]:
-    """The quantum verifier with a source that emits k identical photons per pulse (tags q, q2, ..., qk)."""
-    v = quantum_verifier()
-    v["name"] = f"qpv_verifier_quantum_{k}ph"
-    v["description"] = f"Quantum verifier whose source emits {k} identical photons per pulse. " + v["description"]
+def quantum_verifier_bases(bases: int) -> Dict[str, Any]:
+    """Quantum verifier choosing one of ``bases`` equally spaced bases in the X-Z plane of the Bloch sphere:
+    basis j holds the states RY(j pi / bases)|x>, measured in the real basis at angle j pi / (2 bases)."""
+    v = _verifier("quantum_bases", [
+        {"op": "prepare_bb84", "qubit": "q", "bit": "x", "basis": "0"},
+        {"op": "gate", "gate": "RY", "qubits": "q", "angle": "pi * (sum(shares) % bases) / bases"},
+        {"op": "send_qubit", "port": "prover", "tag": "q", "qubit": "q"},
+    ], f"Quantum verifier with {bases} bases: sends RY(j pi / {bases})|x>, j = sum of the shares mod {bases}.",
+        {"bases": {"default": bases, "min": 2, "description": "Number of bases; the classical verifiers send shares "
+                                                             "in 0..bases-1."},
+         "combine": {"default": "xor", "description": "Unused with more than two bases (the shares are summed)."}})
+    v["name"] = f"qpv_verifier_quantum_{bases}b"
+    return v
+
+
+def _photon_block(v: Dict[str, Any]) -> tuple:
     emit = next(t for t in v["transitions"] if t["id"] == "emit")
-    extra = []
+    k = next(i for i, a in enumerate(emit["actions"]) if a.get("var") == "sent_at")
+    return emit, k
+
+
+def _copies(block: List[Dict[str, Any]], k: int) -> List[Dict[str, Any]]:
+    """The photon-making actions repeated for photons 2..k (slot and tag q2, q3, ...)."""
+    out = []
     for i in range(2, k + 1):
-        extra += [{"op": "prepare_bb84", "qubit": f"q{i}", "bit": "x", "basis": "combine(combine, shares)"},
-                  {"op": "send_qubit", "port": "prover", "tag": f"q{i}", "qubit": f"q{i}"}]
-    emit["actions"][2:2] = extra
+        for a in block:
+            b = dict(a)
+            if b.get("qubit") == "q" or b.get("qubits") == "q":
+                b["qubit" if "qubit" in b else "qubits"] = f"q{i}"
+            if b.get("tag") == "q":
+                b["tag"] = f"q{i}"
+            out.append(b)
+    return out
+
+
+def multi_photon_verifier(k: int, base: Dict[str, Any] = None) -> Dict[str, Any]:
+    """The quantum verifier with a source that emits k identical photons per pulse (tags q, q2, ..., qk)."""
+    v = copy.deepcopy(base) if base else quantum_verifier()
+    v["name"] = f"{v['name']}_{k}ph"
+    v["description"] = f"Quantum verifier whose source emits {k} identical photons per pulse. " + v["description"]
+    emit, n = _photon_block(v)
+    emit["actions"][n:n] = _copies(emit["actions"][:n], k)
+    return v
+
+
+def source_verifier(k: int, mean_photons: float, base: Dict[str, Any] = None) -> Dict[str, Any]:
+    """A weak laser: each pulse holds Poisson(mean_photons) photons; 0, 1, or k identical photons are sent
+    (k copies stand for 'two or more', which is all a photon-splitting attack needs)."""
+    v = copy.deepcopy(base) if base else quantum_verifier()
+    v["name"] = f"{v['name']}_laser"
+    v["description"] = ("Quantum verifier with a weak laser source: each pulse holds a Poisson number of photons "
+                        "(mean 'mean_photons'); empty pulses send nothing. " + v["description"])
+    v["params"]["mean_photons"] = {"default": mean_photons, "min": 0,
+                                   "description": "Average photons per pulse (Poisson); 2 or more are copies."}
+    v["variables"].update({"n_ph": 1, "u": 0.0})
+    arm = next(t for t in v["transitions"] if t["id"] == "arm")
+    arm["actions"][:0] = [
+        {"op": "set", "var": "u", "expr": "rand_uniform()"},
+        {"op": "set", "var": "n_ph", "expr": "0 if u < exp(-mean_photons) else (1 if u < exp(-mean_photons) * "
+                                             "(1 + mean_photons) else 2)"},
+        {"op": "record", "key": "photons", "value": "n_ph"}]
+    emit, n = _photon_block(v)
+    block, rest = emit["actions"][:n], emit["actions"][n:]
+    i = v["transitions"].index(emit)
+    variants = [("emit_empty", "n_ph == 0", rest, "empty pulse"), ("emit", "n_ph == 1", block + rest, "send one photon"),
+                ("emit_many", "n_ph >= 2", block + _copies(block, k) + rest, f"send {k} photons")]
+    v["transitions"][i:i + 1] = [{**copy.deepcopy(emit), "id": tid, "guard": g, "label": lab, "actions": copy.deepcopy(acts)}
+                                 for tid, g, acts, lab in variants]
     return v

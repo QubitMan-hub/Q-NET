@@ -242,6 +242,62 @@
    }
   },
   {
+   "id": "b1_walking_untracked",
+   "section": "B",
+   "title": "B1 · Walking prover, verifiers don't follow it",
+   "who": "honest",
+   "expect": "The first 33 of 100 rounds pass, then every round fails.",
+   "watch": "The prover walks at 1.4 m/s and rounds are 1 ms apart, but the verifiers keep aiming at the starting spot. After about 33 rounds it is more than 4.5 cm away, beyond the precision. Press Play 100 rounds.",
+   "expect_rate": [
+    0.33,
+    0.33
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "honest"
+    },
+    "twists": [
+     {
+      "type": "motion",
+      "party": "P",
+      "vx": 1.4,
+      "interval_ms": 1.0,
+      "tracked": 0.0
+     }
+    ]
+   },
+   "runs": 100
+  },
+  {
+   "id": "b1_walking_tracked",
+   "section": "B",
+   "title": "B1 · Walking prover, verifiers follow its path",
+   "who": "honest",
+   "expect": "Accepted every round.",
+   "watch": "Same walk, but each round aims at where the prover should be by then. Press Play 100 rounds: all pass.",
+   "expect_rate": [
+    1,
+    1
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "honest"
+    },
+    "twists": [
+     {
+      "type": "motion",
+      "party": "P",
+      "vx": 1.4,
+      "interval_ms": 1.0,
+      "tracked": 1.0
+     }
+    ]
+   },
+   "runs": 100
+  },
+  {
    "id": "b2_slow_prover",
    "section": "B",
    "title": "B2 · Prover takes 0.8 ns to respond",
@@ -381,6 +437,68 @@
    }
   },
   {
+   "id": "b5_threshold_honest",
+   "section": "B",
+   "title": "B5 · 2% errors, judged over 360 rounds",
+   "who": "honest",
+   "expect": "About 98% per round; passes the 360-round test practically always.",
+   "watch": "With 2% errors the verifiers cannot demand every round right. Accepting 337 of 360 lets an honest prover through and stops the best cheaters without entanglement (see the next case). 'qpv rounds --honest 0.98 --cheat 0.854' works this out.",
+   "expect_rate": [
+    0.95,
+    1.0
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "honest"
+    },
+    "twists": [
+     {
+      "type": "link",
+      "verifier": "V0",
+      "depolarizing": 0.04
+     },
+     {
+      "type": "test",
+      "rounds": 360,
+      "min_correct": 0.936,
+      "min_answered": 0.0
+     }
+    ]
+   }
+  },
+  {
+   "id": "b5_threshold_cheaters",
+   "section": "B",
+   "title": "B5 · The same 360-round test against the best cheaters",
+   "who": "cheat",
+   "expect": "About 84% per round; fails the 360-round test practically always (well under one in a million).",
+   "watch": "The cheaters win most rounds, but not 93.6% of them. Press Play 100 rounds and read the many-round line.",
+   "expect_rate": [
+    0.78,
+    0.9
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "unentangled"
+    },
+    "twists": [
+     {
+      "type": "link",
+      "verifier": "V0",
+      "depolarizing": 0.04
+     },
+     {
+      "type": "test",
+      "rounds": 360,
+      "min_correct": 0.936,
+      "min_answered": 0.0
+     }
+    ]
+   }
+  },
+  {
    "id": "b6_loss",
    "section": "B",
    "title": "B6 · 60% of photons lost",
@@ -430,6 +548,79 @@
    }
   },
   {
+   "id": "b7_weak_laser_honest",
+   "section": "B",
+   "title": "B7 · Weak laser (0.5 photons per pulse), honest prover",
+   "who": "honest",
+   "expect": "About 39% of rounds; the rest are empty pulses with no answer.",
+   "watch": "Each pulse holds a random number of photons, on average 0.5. With no photon there is nothing to read (1 − e^−0.5 ≈ 39% of pulses have one or more).",
+   "expect_rate": [
+    0.32,
+    0.47
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "honest"
+    },
+    "twists": [
+     {
+      "type": "source",
+      "mean_photons": 0.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "b7_weak_laser_split",
+   "section": "B",
+   "title": "B7 · Weak laser, cheaters wait for two-photon pulses",
+   "who": "cheat",
+   "expect": "About 9% of rounds pass, never with a wrong answer.",
+   "watch": "The cheaters block every pulse with fewer than two photons and use two-photon pulses to read the bit for sure. The verifiers just see more loss, so a loss threshold alone cannot catch them.",
+   "expect_rate": [
+    0.05,
+    0.14
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "split"
+    },
+    "twists": [
+     {
+      "type": "source",
+      "mean_photons": 0.5
+     }
+    ]
+   }
+  },
+  {
+   "id": "b7_dark_counts",
+   "section": "B",
+   "title": "B7 · Detector false clicks (10%)",
+   "who": "honest",
+   "expect": "About 95% of rounds.",
+   "watch": "A false click beside the real one gives a double click, recorded as a random bit, so 10% false clicks cost about 5% of rounds.",
+   "expect_rate": [
+    0.91,
+    0.98
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "honest"
+    },
+    "twists": [
+     {
+      "type": "detector",
+      "party": "P",
+      "dark_count": 0.1
+     }
+    ]
+   }
+  },
+  {
    "id": "b8_many_rounds",
    "section": "B",
    "title": "B8 · Why many rounds matter",
@@ -446,6 +637,32 @@
      "who": "unentangled"
     },
     "twists": []
+   }
+  },
+  {
+   "id": "b8_88_rounds",
+   "section": "B",
+   "title": "B8 · 88 rounds against the best cheaters",
+   "who": "cheat",
+   "expect": "About 85% per round; passes all 88 rounds about once in a million.",
+   "watch": "Each round on its own looks good for the cheaters. Demanding all 88 rounds right leaves them a one-in-a-million chance.",
+   "expect_rate": [
+    0.78,
+    0.92
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "unentangled"
+    },
+    "twists": [
+     {
+      "type": "test",
+      "rounds": 88,
+      "min_correct": 1.0,
+      "min_answered": 0.0
+     }
+    ]
    }
   },
   {
@@ -708,6 +925,62 @@
    }
   },
   {
+   "id": "e1_keyed_impostor",
+   "section": "E",
+   "title": "E1 · Impostor at the claimed spot, answers need a key",
+   "who": "cheat",
+   "expect": "About 0.4% of rounds (guessing an 8-bit key).",
+   "watch": "The real prover shares a fresh 8-bit key with the verifiers each round and attaches it to its answer. The impostor is in the right place but has to guess the key.",
+   "expect_rate": [
+    0.0,
+    0.02
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "honest"
+    },
+    "twists": [
+     {
+      "type": "authenticate",
+      "bits": 8,
+      "holder": "none"
+     },
+     {
+      "type": "strategy",
+      "party": "P",
+      "strategy": "honest",
+      "role": "cheater"
+     }
+    ]
+   }
+  },
+  {
+   "id": "e1_keyed_honest",
+   "section": "E",
+   "title": "E1 · Genuine prover with the key",
+   "who": "honest",
+   "expect": "Accepted every round.",
+   "watch": "The prover holding the key passes as before. The key proves who answered; the timing still proves where.",
+   "expect_rate": [
+    1,
+    1
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "honest"
+    },
+    "twists": [
+     {
+      "type": "authenticate",
+      "bits": 8,
+      "holder": "P"
+     }
+    ]
+   }
+  },
+  {
    "id": "e3_tamper",
    "section": "E",
    "title": "E3 · Someone in the middle flips the basis",
@@ -823,7 +1096,7 @@
    "section": "F",
    "title": "F1 · Cheaters say 'no photon' when they guess wrong",
    "who": "cheat",
-   "expect": "About 50% accepted, 50% 'lost', no wrong answers.",
+   "expect": "About 50% accepted, 50% 'lost', no wrong answers; passes a 200-round test that allows 60% loss.",
    "watch": "Press Play 100 rounds and check the outcomes: lost rounds, but never a wrong bit. With real loss above 50%, verifiers can't tell this from an honest prover.",
    "expect_rate": [
     0.4,
@@ -838,6 +1111,79 @@
      {
       "type": "loss_reports",
       "on": true
+     },
+     {
+      "type": "test",
+      "rounds": 200,
+      "min_correct": 0.95,
+      "min_answered": 0.4
+     }
+    ]
+   }
+  },
+  {
+   "id": "f2_four_bases_honest",
+   "section": "F",
+   "title": "F2 · Four bases: honest prover with 50% loss",
+   "who": "honest",
+   "expect": "About 50% answered, all correct; passes the 200-round test.",
+   "watch": "V0 now picks one of four bases. Half the photons are lost and the prover says so. The test asks for at least 40% of rounds answered and 95% of those right.",
+   "expect_rate": [
+    0.42,
+    0.58
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "honest",
+     "bases": 4
+    },
+    "twists": [
+     {
+      "type": "link",
+      "verifier": "V0",
+      "loss_prob": 0.5
+     },
+     {
+      "type": "loss_reports",
+      "on": true
+     },
+     {
+      "type": "test",
+      "rounds": 200,
+      "min_correct": 0.95,
+      "min_answered": 0.4
+     }
+    ]
+   }
+  },
+  {
+   "id": "f2_four_bases_cheaters",
+   "section": "F",
+   "title": "F2 · Four bases: selective 'no photon' cheaters caught",
+   "who": "cheat",
+   "expect": "About 25% answered; fails the 200-round test practically always.",
+   "watch": "Guessing one basis in four is right only a quarter of the time, so the cheaters must claim 75% loss, more than the test allows. With two bases (F1) they got away with 50%.",
+   "expect_rate": [
+    0.18,
+    0.32
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "who": "lossy",
+     "bases": 4
+    },
+    "twists": [
+     {
+      "type": "loss_reports",
+      "on": true
+     },
+     {
+      "type": "test",
+      "rounds": 200,
+      "min_correct": 0.95,
+      "min_answered": 0.4
      }
     ]
    }

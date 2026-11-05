@@ -31,7 +31,8 @@ import numpy as np
 from .decision import decide
 from .engine import ENGINE_VERSION, Simulation
 from .protocol.project import normalize, set_path, validate_project, errors, ProjectError
-from .qpv import presets
+from .qpv import motion, presets
+from .qpv import rounds as qrounds
 
 Z95 = 1.959963984540054
 
@@ -89,8 +90,8 @@ def run_once(project: Dict[str, Any], seed: int) -> Dict[str, Any]:
 
 
 def _run_chunk(args):
-    project, seeds = args
-    return [run_once(project, s) for s in seeds]
+    project, jobs = args
+    return [run_once(motion.at_round(project, i), s) for i, s in jobs]
 
 
 def _stats(values: List[float]) -> Optional[Dict[str, float]]:
@@ -103,7 +104,7 @@ def _stats(values: List[float]) -> Optional[Dict[str, float]]:
             "p95": float(np.percentile(arr, 95))}
 
 
-def summarize_point(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+def summarize_point(runs: List[Dict[str, Any]], test: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     n = len(runs)
     acc = sum(1 for r in runs if r["outcome"] == "accept")
     per_verifier: Dict[str, Any] = {}
@@ -136,6 +137,7 @@ def summarize_point(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
         "verifiers": per_verifier,
         "mean_counters": {k: v / n for k, v in counters.items()} if n else {},
         "errors": sum(1 for r in runs if r["errors"]),
+        **({"test": qrounds.evaluate(test, runs)} if test else {}),
     }
 
 
@@ -164,7 +166,8 @@ def run_experiment(project: Dict[str, Any], exp: Dict[str, Any],
         if workers > 1 and runs >= 50:
             # imported lazily: multiprocessing is unavailable in the browser build (Pyodide)
             from concurrent.futures import ProcessPoolExecutor
-            chunks = [seeds[i::workers] for i in range(workers)]
+            jobs = list(enumerate(seeds))
+            chunks = [jobs[i::workers] for i in range(workers)]
             raw = [None] * runs
             with ProcessPoolExecutor(max_workers=workers) as pool:
                 for i, res in enumerate(pool.map(_run_chunk, [(doc, c) for c in chunks])):
@@ -173,15 +176,15 @@ def run_experiment(project: Dict[str, Any], exp: Dict[str, Any],
             if progress:
                 progress(done, total)
         else:
-            for s in seeds:
+            for i, s in enumerate(seeds):
                 if cancel and cancel():
                     raise RuntimeError("experiment cancelled")
-                raw.append(run_once(doc, s))
+                raw.append(run_once(motion.at_round(doc, i), s))
                 done += 1
                 if progress and done % 25 == 0:
                     progress(done, total)
         out_points.append({"index": k, "assignment": assignment, "runs": raw,
-                           "summary": summarize_point(raw)})
+                           "summary": summarize_point(raw, doc["verification"].get("test"))})
     wall = time.perf_counter() - t0
     return {
         "experiment": copy.deepcopy(exp),

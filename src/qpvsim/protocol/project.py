@@ -406,6 +406,15 @@ def validate_project(project: Dict[str, Any]) -> List[Issue]:
     for v in vids:
         if v not in ids:
             err("verification.verifiers", f"unknown verifier {v!r}")
+    if ver.get("test") is not None:
+        try:
+            from ..qpv.rounds import normalize_test
+            normalize_test(ver["test"])
+        except (TypeError, ValueError) as exc:
+            err("verification.test", str(exc))
+    from ..qpv.motion import issues as motion_issues
+    for msg in motion_issues(project):
+        err("meta.motion", msg)
     if ver.get("rule") == "k_of_n":
         k = ver.get("k")
         if not isinstance(k, int) or not 1 <= k <= len(vids):

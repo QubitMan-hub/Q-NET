@@ -87,8 +87,9 @@ def test_displaced_prover_rejected_by_far_verifier():
 
 def test_wrong_answer_classified():
     doc = normalize(example("qpv_bb84_honest"))
-    doc["automata"]["qpv_prover_2v"]["transitions"][0]["actions"][1]["value"] = "1 - answer"
-    doc["automata"]["qpv_prover_2v"]["transitions"][0]["actions"][2]["value"] = "1 - answer"
+    for act in doc["automata"]["qpv_prover_2v"]["transitions"][0]["actions"]:
+        if act["op"] == "send":
+            act["value"] = "1 - answer"
     sim = run(doc)
     assert {v["category"] for v in sim.snapshot()["decision"]["verifiers"]} == {"wrong_answer"}
 

@@ -17,7 +17,7 @@ def test_demo_recipe_matches_its_expected_pass_rate(demo):
     assert [i.message for i in validate_project(doc) if i.level == "error"] == []
     assert check_trace(Simulation(doc, seed=1).run())["ok"]
     lo, hi = demo["expect_rate"]
-    p = run_experiment(doc, {"runs": 300, "seed": 11})["points"][0]["summary"]["acceptance"]["p"]
+    p = run_experiment(doc, {"runs": demo.get("runs", 300), "seed": 11})["points"][0]["summary"]["acceptance"]["p"]
     assert lo - 1e-9 <= p <= hi + 1e-9, f"{demo['id']}: {p} not in {demo['expect_rate']}"
 
 

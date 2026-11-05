@@ -271,7 +271,7 @@
     "qpv_verifier_quantum": {
       "name": "qpv_verifier_quantum",
       "role": "verifier",
-      "description": "Quantum verifier: sends the BB84 qubit H^b|x>, with b = combine(shares). Times its signal to reach the claimed position at the meeting time t_meet and accepts iff the answer equals x and arrives by t_meet + d(V, claim)/c + tolerance (local clock, integer fs). t_meet is t_ref, moved later when the farthest verifier could only make t_ref by sending before t = 0. extra_delay_ns compensates a slower path; with allow_loss_reports a 'nophoton' reply ends the round as lost.",
+      "description": "Quantum verifier: sends the BB84 qubit H^b|x>, with b = combine(shares). Times its signal to reach the claimed position at the meeting time t_meet and accepts iff the answer equals x (with the shared key, when key_bits > 0) and arrives by t_meet + d(V, claim)/c + tolerance (local clock, integer fs). t_meet is t_ref, moved later when the farthest verifier could only make t_ref by sending before t = 0. extra_delay_ns compensates a slower path; with allow_loss_reports a 'nophoton' reply ends the round as lost.",
       "ports": [
         "prover"
       ],
@@ -294,6 +294,11 @@
           "default": false,
           "description": "Accept a 'nophoton' reply as a lost round instead of waiting for an answer."
         },
+        "key_bits": {
+          "default": 0,
+          "min": 0,
+          "description": "Answers must carry the round's shared secret key of this many bits (0 = no key). The key is shared out of band with the genuine prover."
+        },
         "combine": {
           "default": "xor",
           "description": "How the classical shares form the basis: xor | inner_product."
@@ -306,7 +311,9 @@
         ],
         "t_meet_fs": 0,
         "deadline_fs": 0,
-        "sent_at": 0.0
+        "sent_at": 0.0,
+        "key": [],
+        "expected": 0
       },
       "initial": "idle",
       "states": [
@@ -373,6 +380,11 @@
               "op": "set",
               "var": "t_meet_fs",
               "expr": "max(fs(t_ref_ns), max_claim_travel_fs + fs(1))"
+            },
+            {
+              "op": "set",
+              "var": "expected",
+              "expr": "x if key_bits == 0 else [x, key]"
             },
             {
               "op": "record",
@@ -447,7 +459,7 @@
             ],
             "port": "prover"
           },
-          "guard": "msg.value == x and msg.time_fs <= deadline_fs",
+          "guard": "msg.value == expected and msg.time_fs <= deadline_fs",
           "label": "correct & on time",
           "duration_ns": 0,
           "actions": [
@@ -567,7 +579,7 @@
     "qpv_verifier_classical": {
       "name": "qpv_verifier_classical",
       "role": "verifier",
-      "description": "Classical verifier: sends its share of the basis. Times its signal to reach the claimed position at the meeting time t_meet and accepts iff the answer equals x and arrives by t_meet + d(V, claim)/c + tolerance (local clock, integer fs). t_meet is t_ref, moved later when the farthest verifier could only make t_ref by sending before t = 0. extra_delay_ns compensates a slower path; with allow_loss_reports a 'nophoton' reply ends the round as lost.",
+      "description": "Classical verifier: sends its share of the basis. Times its signal to reach the claimed position at the meeting time t_meet and accepts iff the answer equals x (with the shared key, when key_bits > 0) and arrives by t_meet + d(V, claim)/c + tolerance (local clock, integer fs). t_meet is t_ref, moved later when the farthest verifier could only make t_ref by sending before t = 0. extra_delay_ns compensates a slower path; with allow_loss_reports a 'nophoton' reply ends the round as lost.",
       "ports": [
         "prover"
       ],
@@ -590,6 +602,11 @@
           "default": false,
           "description": "Accept a 'nophoton' reply as a lost round instead of waiting for an answer."
         },
+        "key_bits": {
+          "default": 0,
+          "min": 0,
+          "description": "Answers must carry the round's shared secret key of this many bits (0 = no key). The key is shared out of band with the genuine prover."
+        },
         "share_index": {
           "default": 0,
           "description": "Which of the shared basis shares this verifier sends."
@@ -602,7 +619,9 @@
         ],
         "t_meet_fs": 0,
         "deadline_fs": 0,
-        "sent_at": 0.0
+        "sent_at": 0.0,
+        "key": [],
+        "expected": 0
       },
       "initial": "idle",
       "states": [
@@ -671,6 +690,11 @@
               "expr": "max(fs(t_ref_ns), max_claim_travel_fs + fs(1))"
             },
             {
+              "op": "set",
+              "var": "expected",
+              "expr": "x if key_bits == 0 else [x, key]"
+            },
+            {
               "op": "record",
               "key": "meeting_ns",
               "value": "t_meet_fs / 1e6"
@@ -737,7 +761,7 @@
             ],
             "port": "prover"
           },
-          "guard": "msg.value == x and msg.time_fs <= deadline_fs",
+          "guard": "msg.value == expected and msg.time_fs <= deadline_fs",
           "label": "correct & on time",
           "duration_ns": 0,
           "actions": [

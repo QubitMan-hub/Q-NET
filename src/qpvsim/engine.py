@@ -830,6 +830,9 @@ class Simulation:
         flip = node.noise.get("measurement_flip")
         if flip and node.rng.random() < float(flip):
             r ^= 1
+        dark = node.noise.get("dark_count")  # a false click beside the real one: the double click gives a random bit
+        if dark and node.rng.random() < float(dark):
+            r = int(node.rng.integers(0, 2))
         self.counters["measurements"] += 1
         return r
 

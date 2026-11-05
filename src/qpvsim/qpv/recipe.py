@@ -25,7 +25,9 @@ from typing import Any, Dict, List
 from ..protocol.project import normalize, verifier_ids
 from . import automata as qa
 from .presets import apply as apply_preset
-from .scenario import ANSWERERS, LABELS, POLICIES, PROVERS, build, link, qpv_verifiers
+from . import motion as qmotion
+from . import rounds as qrounds
+from .scenario import ANSWERERS, LABELS, POLICIES, PROVERS, bases_of, build, link, qpv_verifiers
 
 C = 299_792_458.0
 
@@ -60,10 +62,11 @@ def measure_now(n: int) -> Dict[str, Any]:
         [{"id": "measure", "from": "wait", "to": "done", "label": "measure on arrival & answer all",
           "trigger": {"type": "receive", "tags": ["q"], "port": "v0"},
           "actions": [{"op": "measure", "qubit": "q", "basis": basis, "angle": "pi / 8", "result": "m"}]
-          + qa._send_all(ports, "answer", "m")}],
+          + [qa.KEY_PICK] + qa._send_all(ports, "answer", qa.keyed("m"))}],
         _done("wait", "done"),
-        params={"policy": {"default": "breidbart", "description": "breidbart | random | Z | X | leaked"}, **_COMBINE},
-        variables={"m": 0, "shares": [0]})
+        params={"policy": {"default": "breidbart", "description": "breidbart | random | Z | X | leaked"}, **_COMBINE,
+                **qa.KEY_PARAM},
+        variables={"m": 0, "shares": [0], "key": [], "k": []})
 
 
 def guess_first(n: int) -> Dict[str, Any]:
@@ -76,12 +79,12 @@ def guess_first(n: int) -> Dict[str, Any]:
         [{"id": "guess", "from": "wait", "to": "half", "label": "guess for the quantum verifier",
           "trigger": {"type": "receive", "tags": ["theta"] * (n - 1)},
           "actions": [{"op": "set", "var": "sh", "expr": "received.theta"}, {"op": "set", "var": "g", "expr": "rand_bit()"},
-                      {"op": "send", "port": "v0", "tag": "answer", "value": "g"}]},
+                      qa.KEY_PICK, {"op": "send", "port": "v0", "tag": "answer", "value": qa.keyed("g")}]},
          {"id": "measure", "from": "half", "to": "done", "label": "measure & answer the rest",
           "trigger": {"type": "receive", "tags": ["q"], "port": "v0"},
           "actions": [{"op": "measure", "qubit": "q", "basis": "combine(combine, sh)", "result": "m"}]
-          + qa._send_all(ports[1:], "answer", "m")}],
-        _done("wait", "half", "done"), params=dict(_COMBINE), variables={"sh": [0], "g": 0, "m": 0})
+          + qa._send_all(ports[1:], "answer", qa.keyed("m"))}],
+        _done("wait", "half", "done"), params={**_COMBINE, **qa.KEY_PARAM}, variables={"sh": [0], "g": 0, "m": 0, "key": [], "k": []})
 
 
 def guess_all(n: int) -> Dict[str, Any]:
@@ -90,10 +93,10 @@ def guess_all(n: int) -> Dict[str, Any]:
         f"strategy_guess_{n}v", "adversary", "Ignores the photon and sends an independent random bit to every verifier.",
         ports,
         [{"id": "guess", "from": "wait", "to": "done", "label": "guess", "trigger": {"type": "receive", "tags": ["q"]},
-          "actions": [{"op": "discard", "qubit": "q"}]
+          "actions": [{"op": "discard", "qubit": "q"}, qa.KEY_PICK]
           + [x for p in ports for x in ({"op": "set", "var": "g", "expr": "rand_bit()"},
-                                         {"op": "send", "port": p, "tag": "answer", "value": "g"})]}],
-        _done("wait", "done"), variables={"g": 0})
+                                         {"op": "send", "port": p, "tag": "answer", "value": qa.keyed("g")})]}],
+        _done("wait", "done"), params=dict(qa.KEY_PARAM), variables={"g": 0, "key": [], "k": []})
 
 
 STRATEGIES: Dict[str, Dict[str, Any]] = {
@@ -177,9 +180,12 @@ def _make_cheater(doc, p):
 def _use_strategy(doc, p, strategy: str, policy: str = "breidbart"):
     if strategy not in STRATEGIES:
         raise RecipeError(f"unknown strategy {strategy!r}; choose from {', '.join(STRATEGIES)}")
-    n = len(verifier_ids(doc))
-    p["automaton"] = _install(doc, STRATEGIES[strategy]["make"](n))
-    params = {k: v for k, v in p.get("params", {}).items() if k == "combine"}
+    n, bases = len(verifier_ids(doc)), bases_of(doc)
+    if bases != 2 and strategy not in ("honest", "guess"):
+        raise RecipeError(f"with {bases} bases only the honest and guess strategies are available")
+    make = STRATEGIES[strategy]["make"]
+    p["automaton"] = _install(doc, make(n, bases) if strategy == "honest" else make(n))
+    params = {k: v for k, v in p.get("params", {}).items() if k in ("combine", "key_bits")}
     if strategy == "measure_now":
         params["policy"] = policy
         if policy == "leaked":
@@ -303,20 +309,88 @@ def _meeting(doc, tw):
 
 
 def _loss_reports(doc, tw):
+    on = bool(tw.get("on", True))
     for v in _verifier_list(doc, "all"):
-        v["params"]["allow_loss_reports"] = bool(tw.get("on", True))
+        v["params"]["allow_loss_reports"] = on
+    n, bases = len(verifier_ids(doc)), bases_of(doc)
+    for p in doc["participants"]:  # honest provers now say 'no photon' when nothing clicks
+        if p["automaton"].startswith("qpv_prover_"):
+            p["automaton"] = _install(doc, qa.honest_prover(n, bases, report_loss=on))
 
 
 def _processing(doc, tw):
     _party(doc, tw["party"])["processing_ns"] = float(tw["ns"])
 
 
+def _plain_quantum(doc) -> Dict[str, Any]:
+    bases = bases_of(doc)
+    return qa.quantum_verifier() if bases == 2 else qa.quantum_verifier_bases(bases)
+
+
 def _pulse(doc, tw):
     k = int(tw.get("photons") or 1)
-    for v in qpv_verifiers(doc)[:1]:
-        v["automaton"] = "qpv_verifier_quantum" if k <= 1 else _install(doc, qa.multi_photon_verifier(k))
-        if v["automaton"] == "qpv_verifier_quantum":
-            doc["automata"].setdefault("qpv_verifier_quantum", qa.quantum_verifier())
+    base = _plain_quantum(doc)
+    v = qpv_verifiers(doc)[0]
+    v["automaton"] = _install(doc, base if k <= 1 else qa.multi_photon_verifier(k, base))
+
+
+def _source(doc, tw):
+    """A weak laser: Poisson photon numbers per pulse; two or more photons arrive as copies."""
+    mu = float(tw.get("mean_photons") if tw.get("mean_photons") is not None else 0.5)
+    if mu < 0:
+        raise RecipeError("mean_photons cannot be negative")
+    v = qpv_verifiers(doc)[0]
+    v["automaton"] = _install(doc, qa.source_verifier(len(verifier_ids(doc)), mu, _plain_quantum(doc)))
+    v["params"]["mean_photons"] = mu
+
+
+def _detector(doc, tw):
+    """Detector false clicks: each measurement of the party is replaced by a random bit with this probability
+    (a spurious click alongside the real one; double clicks are resolved by a random bit)."""
+    rate = float(tw.get("dark_count") or 0.0)
+    if not 0 <= rate <= 1:
+        raise RecipeError("dark_count is a probability between 0 and 1")
+    who = tw.get("party") or "P"
+    vids = set(verifier_ids(doc))
+    parties = [p for p in doc["participants"] if p["id"] not in vids] if who == "all" else [_party(doc, who)]
+    for p in parties:
+        p["noise"] = {**(p.get("noise") or {}), "dark_count": rate}
+
+
+def _authenticate(doc, tw):
+    """Answers must carry a fresh shared key: verifiers and the key holder share it before each round."""
+    bits = int(tw.get("bits") or 8)
+    if not 1 <= bits <= 64:
+        raise RecipeError("a key has between 1 and 64 bits")
+    holders = [h for h in str(tw.get("holder") or "P").replace(",", " ").split() if h and h != "none"]
+    for h in holders:
+        _party(doc, h)
+    vids = verifier_ids(doc)
+    doc["resources"] = [r for r in doc["resources"] if r.get("id") != "vkey"]
+    doc["resources"].append({"id": "vkey", "type": "shared_random", "holders": list(vids) + holders,
+                             "vars": {"key": f"rand_bits({bits})"}})
+    for p in doc["participants"]:
+        declared = (doc["automata"].get(p["automaton"]) or {}).get("params") or {}
+        if p["id"] in vids or "key_bits" in declared:
+            p["params"]["key_bits"] = bits
+
+
+def _motion(doc, tw):
+    who = tw.get("party") or "P"
+    _party(doc, who)
+    doc["meta"]["motion"] = {"party": who, "velocity_mps": [float(tw.get(k) or 0.0) for k in ("vx", "vy", "vz")][
+                                 :len(doc["claim"]["position"])],
+                             "tracked": float(tw.get("tracked") or 0.0),
+                             "round_interval_ms": float(tw.get("interval_ms") or 1.0)}
+    bad = qmotion.issues(doc)
+    if bad:
+        raise RecipeError("; ".join(bad))
+
+
+def _test(doc, tw):
+    doc["verification"]["test"] = qrounds.normalize_test(
+        {"rounds": tw.get("rounds") or 88, "min_correct": 1.0 if tw.get("min_correct") is None else tw["min_correct"],
+         "min_answered": tw.get("min_answered") or 0.0})
 
 
 def _epr_noise(doc, tw):
@@ -373,6 +447,22 @@ TWISTS: Dict[str, Dict[str, Any]] = {
     "processing": {"label": "Change a party's processing time", "apply": _processing,
                    "fields": {"party": _f("party", "Who", "P"), "ns": _f("number", "Processing (ns)", 0.8)}},
     "pulse": {"label": "Photons per pulse", "apply": _pulse, "fields": {"photons": _f("number", "Photons", 2)}},
+    "source": {"label": "Weak laser source (random photon number)", "apply": _source,
+               "fields": {"mean_photons": _f("number", "Average photons per pulse", 0.5)}},
+    "detector": {"label": "Detector false clicks", "apply": _detector,
+                 "fields": {"party": _f("party", "Whose detector", "P", allow_all=True),
+                            "dark_count": _f("number", "False-click probability per measurement", 0.1)}},
+    "authenticate": {"label": "Answers must carry a secret key", "apply": _authenticate,
+                     "fields": {"bits": _f("number", "Key bits", 8), "holder": _f("party", "Who holds the key ('none': nobody but the verifiers)", "P")}},
+    "motion": {"label": "The prover moves between rounds", "apply": _motion,
+               "fields": {"party": _f("party", "Who moves", "P"), "vx": _f("number", "Speed x (m/s)", 1.4),
+                          "vy": _f("number", "Speed y (m/s)", 0.0), "vz": _f("number", "Speed z (m/s)", 0.0, dims=3),
+                          "interval_ms": _f("number", "Time between rounds (ms)", 1.0),
+                          "tracked": _f("number", "Verifiers follow the path (1 = exactly, 0 = not at all)", 0.0)}},
+    "test": {"label": "Judge over many rounds", "apply": _test,
+             "fields": {"rounds": _f("number", "Rounds", 88),
+                        "min_correct": _f("number", "Fraction of answered rounds that must be right", 1.0),
+                        "min_answered": _f("number", "Fraction of rounds that must be answered", 0.0)}},
     "epr_noise": {"label": "Noise on shared entangled pairs", "apply": _epr_noise,
                   "fields": {"noise": _f("number", "Noise (0 = perfect)", 0.1)}},
     "leak": {"label": "Leak the verifiers' secret to a party", "apply": _leak, "fields": {"to": _f("party", "To", "P")}},
@@ -384,9 +474,10 @@ BASE_FIELDS = {
     "tolerance_ns": _f("number", "Allowance (ns)", 0.5), "who": _f("choice", "Who answers", "honest", choices=list(ANSWERERS)),
     "policy": _f("choice", "Measurement policy", "breidbart", choices=list(POLICIES)),
     "combine": _f("choice", "Basis from shares", "xor", choices=list(qa.COMBINES)),
+    "bases": _f("choice", "Measurement bases (2 = BB84)", 2, choices=[2, 3, 4, 6, 8]),
 }
 _BUILD_KEYS = {"dim", "verifiers", "radius_m", "claim", "tolerance_ns", "combine", "share_bits", "policy",
-               "processing_ns", "displacement_m", "seed"}
+               "processing_ns", "displacement_m", "seed", "bases"}
 
 
 def schema() -> Dict[str, Any]:

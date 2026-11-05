@@ -102,8 +102,19 @@ def qpv_verifiers(doc) -> List[Dict[str, Any]]:
     return vs
 
 
+MULTI_BASIS_ANSWERERS = ("honest", "displaced", "lossy", "guess")
+
+
+def bases_of(doc) -> int:
+    """How many measurement bases the quantum verifier chooses from (2 = BB84)."""
+    v0 = qpv_verifiers(doc)[0]
+    spec = (doc["automata"].get(v0["automaton"]) or {}).get("params", {}).get("bases", {})
+    return int(v0["params"].get("bases", spec.get("default", 2) if isinstance(spec, dict) else 2))
+
+
 def _add_answerers(doc, answerer, policy, processing_ns, displacement_m):
     vs = qpv_verifiers(doc)
+    bases = bases_of(doc)
     n, claim = len(vs), doc["claim"]["position"]
     combine = vs[0]["params"].get("combine", "xor")
     radius = max(math.dist(v["position"], claim) for v in vs) or 1.0
@@ -112,13 +123,15 @@ def _add_answerers(doc, answerer, policy, processing_ns, displacement_m):
         raise ValueError(f"unknown prover or attack {answerer!r}; choose from {', '.join(ANSWERERS)}")
     if answerer == "teleport" and combine != "xor":
         raise ValueError("the teleportation chain attack applies to xor shares only")
+    if bases != 2 and answerer not in MULTI_BASIS_ANSWERERS:
+        raise ValueError(f"with {bases} bases the workbench has these answerers: {', '.join(MULTI_BASIS_ANSWERERS)}")
     if policy not in POLICIES:
         raise ValueError(f"policy must be one of {', '.join(POLICIES)}")
     doc["claim"]["prover"] = "P" if answerer in ("honest", "displaced") else None
     if answerer in ("honest", "displaced"):
         honest = answerer == "honest"
         pos = claim if honest else _at(claim, [-1.0], displacement_m)
-        a = qa.honest_prover(n)
+        a = qa.honest_prover(n, bases)
         doc["automata"][a["name"]] = a
         doc["participants"].append(participant(
             "P", "prover" if honest else "adversary", "Prover P" if honest else "Dishonest prover P'", pos,
@@ -127,7 +140,7 @@ def _add_answerers(doc, answerer, policy, processing_ns, displacement_m):
         return
     for j, v in enumerate(vs):
         a = (qa.adv_unentangled(j, n) if answerer == "unentangled" else qa.adv_chain(j, n) if answerer == "teleport"
-             else qa.adv_split(j, n) if answerer == "split" else qa.adv_lossy(j, n) if answerer == "lossy"
+             else qa.adv_split(j, n) if answerer == "split" else qa.adv_lossy(j, n, bases) if answerer == "lossy"
              else qa.adv_guess())
         doc["automata"][a["name"]] = a
         pos = [round((c + p) / 2, 12) for c, p in zip(claim, v["position"])]
@@ -144,8 +157,11 @@ def _add_answerers(doc, answerer, policy, processing_ns, displacement_m):
 def build(dim: int = 2, verifiers: Optional[int] = None, radius_m: float = 3.0, claim: Optional[List[float]] = None,
           tolerance_ns: float = 0.5, combine: str = "xor", share_bits: int = 4, prover: str = "honest",
           attack: str = "none", policy: str = "breidbart", processing_ns: float = 0.2,
-          displacement_m: float = 1.0, seed: int = 7, name: Optional[str] = None) -> Dict[str, Any]:
-    """A complete, wired, runnable n-verifier QPV_BB84^f project (attack != none replaces the prover)."""
+          displacement_m: float = 1.0, seed: int = 7, name: Optional[str] = None, bases: int = 2) -> Dict[str, Any]:
+    """A complete, wired, runnable n-verifier QPV_BB84^f project (attack != none replaces the prover).
+
+    ``bases > 2`` replaces BB84's two bases by that many equally spaced bases (the classical verifiers' shares
+    are numbers mod ``bases``), which makes selective 'no photon' answers less useful to cheaters."""
     n = verifiers or (2 if dim == 1 else dim + 1)
     if dim not in (1, 2, 3):
         raise ValueError("dimension must be 1, 2 or 3")
@@ -158,6 +174,11 @@ def build(dim: int = 2, verifiers: Optional[int] = None, radius_m: float = 3.0, 
     if combine not in qa.COMBINES or (combine == "inner_product" and n < 3):
         raise ValueError("combine must be xor, or inner_product with at least 3 verifiers")
     answerer = attack if attack != "none" else prover
+    bases = int(bases)
+    if not 2 <= bases <= 64:
+        raise ValueError("bases must be between 2 and 64")
+    if bases != 2 and combine != "xor":
+        raise ValueError("more than two bases sum the shares; leave combine at xor")
     claim = [float(c) for c in claim or []]
     claim += [0.0] * (max(2, dim) - len(claim))
     travel_ns = radius_m / tu.SPEED_OF_LIGHT_MPS * 1e9
@@ -172,19 +193,21 @@ def build(dim: int = 2, verifiers: Optional[int] = None, radius_m: float = 3.0, 
         "Verifiers are trusted, know their positions and the claim, share private randomness (x and the basis "
         "shares) before t=0 and have synchronised clocks unless offsets or drift are configured.",
         "One simulation run = one protocol round."]
-    for v in (qa.quantum_verifier(), qa.classical_verifier()):
+    quantum = qa.quantum_verifier() if bases == 2 else qa.quantum_verifier_bases(bases)
+    for v in (quantum, qa.classical_verifier()):
         doc["automata"][v["name"]] = v
     for j, d in enumerate(directions(dim, n)):
         pos = _at(claim, d, radius_m)
         doc["participants"].append(participant(
             f"V{j}", "verifier", f"Verifier V{j} (qubit)" if j == 0 else f"Verifier V{j} ({'basis' if n == 2 else f'share {j}'})",
-            pos, "qpv_verifier_quantum" if j == 0 else "qpv_verifier_classical", "verifier",
+            pos, quantum["name"] if j == 0 else "qpv_verifier_classical", "verifier",
             _ui(claim, pos, radius_m), {"t_ref_ns": t_ref, "tolerance_ns": tolerance_ns,
                                         **({"combine": combine} if j == 0 and combine != "xor" else {}),
                                         **({"share_index": j - 1} if j > 1 else {})},
             verifier_type="quantum" if j == 0 else "classical"))
     doc["verification"]["verifiers"] = [f"V{j}" for j in range(n)]
-    share = "rand_bit()" if combine == "xor" else f"rand_bits({int(share_bits)})"
+    share = (f"rand_int(0, {bases - 1})" if bases != 2 else "rand_bit()" if combine == "xor"
+             else f"rand_bits({int(share_bits)})")
     doc["resources"].append({"id": "vshared", "type": "shared_random", "holders": list(doc["verification"]["verifiers"]),
                              "vars": {"x": "rand_bit()", "shares": "[" + ", ".join([share] * (n - 1)) + "]"}})
     doc["claim"]["prover"] = None

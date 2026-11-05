@@ -128,7 +128,7 @@ def test_explanation_wrong_answer():
         a["value"] = "1 - answer"
     _, v = _verdicts(doc)
     s = v["V0"]["sentence"]
-    assert s.startswith("Rejected: V0 received the answer") and "failed the check `msg.value == x" in s
+    assert s.startswith("Rejected: V0 received the answer") and "failed the check `msg.value == expected" in s
     assert {"kind": "transition", "automaton": "qpv_verifier_quantum", "id": "accept"} in v["V0"]["refs"]
 
 
