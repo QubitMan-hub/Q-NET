@@ -941,6 +941,39 @@ class Simulation:
             setvar(a["results"][1], m1)
             self.counters["quantum_ops"] += 1
             out.update(qubits=[s0, s1], results=[m0, m1])
+        elif op in ("prepare_mub", "measure_mub"):
+            from .qpv import mub
+            d = int(ev("dim"))
+            slots = list(a["qubits"])
+            if len(slots) != mub.qubits_for(d):
+                raise ProtocolError(f"a qudit of dimension {d} needs {mub.qubits_for(d)} slots, got {len(slots)}")
+            basis = int(ev("basis"))
+            if op == "prepare_mub":
+                if not caps.prepare:
+                    raise CapabilityViolation(node.id, "prepare", "qudit preparation")
+                value = int(ev("value"))
+                ket = mub.vector(d, basis, value)
+                for s in slots:
+                    if s in node.qubits:
+                        self.backend.discard(node.qubits.pop(s).qid)
+                    self._check_capacity(node, s)
+                qids = self.backend.create_entangled(ket, len(slots))
+                for s, q in zip(slots, qids):
+                    self._store_qubit(node, s, q, t, origin=f"prepared by {tr.id}")
+                self.counters["quantum_ops"] += 1
+                out.update(qubits=slots, dim=d, basis=basis, value=value)
+            else:
+                if not caps.allows_basis("mub"):
+                    raise CapabilityViolation(node.id, "measure_bases", "measurement in a qudit basis")
+                qids = [self._qubit(node, s, t) for s in slots]
+                self.backend.apply_unitary(qids, mub.bases(d)[basis].conj().T)
+                bits = [self._measure(node, q, qb.I2) for q in qids]
+                for s, q in zip(slots, qids):
+                    self.backend.discard(q)
+                    del node.qubits[s]
+                value = int("".join(map(str, bits)), 2)
+                setvar(a["result"], value)
+                out.update(qubits=slots, dim=d, basis=basis, result=value)
         elif op == "discard":
             slot = a["qubit"]
             if slot in node.qubits:

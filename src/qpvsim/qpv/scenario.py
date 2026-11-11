@@ -96,7 +96,7 @@ def _ui(claim, pos, radius, row=0):
 def qpv_verifiers(doc) -> List[Dict[str, Any]]:
     vs = [p for p in doc["participants"] if p["id"] in verifier_ids(doc)]
     kinds = [p["automaton"] for p in vs]
-    if not vs or not kinds[0].startswith("qpv_verifier_quantum") or any(k != "qpv_verifier_classical" for k in kinds[1:]):
+    if not vs or not all(k.startswith("qpv_verifier_") for k in kinds):
         raise ValueError("this needs a QPV setup: a quantum verifier followed by classical verifiers from the "
                          "QPV library (build one with the scenario builder)")
     return vs
@@ -218,6 +218,9 @@ def build(dim: int = 2, verifiers: Optional[int] = None, radius_m: float = 3.0, 
 
 def switch_attack(project: Dict[str, Any], attack: str, policy: str = "breidbart") -> Dict[str, Any]:
     """Replace whoever answers at the claim (prover or attackers) and rewire; verifiers stay as they are."""
+    if ((project.get("meta") or {}).get("qpv") or {}).get("protocol", "bb84") != "bb84":
+        from .protocols import switch  # the other protocols build their own provers and attackers
+        return switch(project, attack)
     doc = normalize(copy.deepcopy(project))
     keep = {v["id"] for v in qpv_verifiers(doc)}
     gone = {p["id"] for p in doc["participants"] if p["id"] not in keep}

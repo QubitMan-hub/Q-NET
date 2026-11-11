@@ -26,8 +26,10 @@ from ..protocol.project import normalize, verifier_ids
 from . import automata as qa
 from .presets import apply as apply_preset
 from . import motion as qmotion
+from . import protocols as qprotocols
+from . import site as qsite
 from . import rounds as qrounds
-from .scenario import ANSWERERS, LABELS, POLICIES, PROVERS, bases_of, build, link, qpv_verifiers
+from .scenario import ANSWERERS, LABELS, POLICIES, PROVERS, bases_of, build, link, qpv_verifiers, switch_attack
 
 C = 299_792_458.0
 
@@ -177,7 +179,13 @@ def _make_cheater(doc, p):
         doc["claim"]["prover"] = None
 
 
+def _bb84_only(doc, what: str):
+    if qprotocols.protocol_of(doc) != "bb84":
+        raise RecipeError(f"{what} works with the BB84 protocol only")
+
+
 def _use_strategy(doc, p, strategy: str, policy: str = "breidbart"):
+    _bb84_only(doc, "changing a party's strategy")
     if strategy not in STRATEGIES:
         raise RecipeError(f"unknown strategy {strategy!r}; choose from {', '.join(STRATEGIES)}")
     n, bases = len(verifier_ids(doc)), bases_of(doc)
@@ -312,6 +320,8 @@ def _loss_reports(doc, tw):
     on = bool(tw.get("on", True))
     for v in _verifier_list(doc, "all"):
         v["params"]["allow_loss_reports"] = on
+    if qprotocols.protocol_of(doc) != "bb84":
+        return
     n, bases = len(verifier_ids(doc)), bases_of(doc)
     for p in doc["participants"]:  # honest provers now say 'no photon' when nothing clicks
         if p["automaton"].startswith("qpv_prover_"):
@@ -328,6 +338,7 @@ def _plain_quantum(doc) -> Dict[str, Any]:
 
 
 def _pulse(doc, tw):
+    _bb84_only(doc, "photons per pulse")
     k = int(tw.get("photons") or 1)
     base = _plain_quantum(doc)
     v = qpv_verifiers(doc)[0]
@@ -336,6 +347,7 @@ def _pulse(doc, tw):
 
 def _source(doc, tw):
     """A weak laser: Poisson photon numbers per pulse; two or more photons arrive as copies."""
+    _bb84_only(doc, "a weak laser source")
     mu = float(tw.get("mean_photons") if tw.get("mean_photons") is not None else 0.5)
     if mu < 0:
         raise RecipeError("mean_photons cannot be negative")
@@ -385,6 +397,57 @@ def _motion(doc, tw):
     bad = qmotion.issues(doc)
     if bad:
         raise RecipeError("; ".join(bad))
+
+
+FAULTS = ("offline", "always_accept", "always_reject")
+
+
+def fault_verifier(spec: Dict[str, Any], fault: str) -> Dict[str, Any]:
+    """A copy of a verifier's automaton that is broken (offline: never decides) or dishonest (decides regardless)."""
+    if fault not in FAULTS:
+        raise RecipeError(f"fault must be one of {', '.join(FAULTS)}")
+    v = copy.deepcopy(spec)
+    v["name"] = f"{spec['name']}_{fault}"
+    deciding = [t for t in v["transitions"] if t["from"] == "waiting"]
+    if fault == "offline":
+        v["description"] = "OFFLINE verifier: sends its challenge but never reports a verdict. " + v["description"]
+        v["states"].append(qa._state("silent", "terminal", "No report", 470, 0, "abort"))
+        for t in deciding:
+            t["to"], t["label"] = "silent", "no report (offline)"
+            t["actions"] = [a for a in t["actions"] if a["op"] != "verdict"]
+        return v
+    to, outcome = ("accepted", "accept") if fault == "always_accept" else ("rejected", "reject")
+    v["description"] = (f"DISHONEST verifier: {'accepts' if outcome == 'accept' else 'rejects'} every round whatever "
+                        "arrives. " + v["description"])
+    for t in deciding:
+        t["to"] = to
+        t.pop("guard", None) if t["id"] == "lost" else None
+        for a in t["actions"]:
+            if a["op"] == "verdict":
+                a["outcome"], a["reason"] = outcome, f"'{fault.replace('_', ' ')} (faulty verifier)'"
+    return v
+
+
+def _verifier_fault(doc, tw):
+    v = _verifier_list(doc, tw.get("verifier") or "V0")[0]
+    v["automaton"] = _install(doc, fault_verifier(doc["automata"][v["automaton"]], tw.get("fault") or "offline"))
+
+
+def _rule(doc, tw):
+    rule = tw.get("rule") or "all"
+    if rule not in ("all", "any", "k_of_n"):
+        raise RecipeError("rule must be all, any or k_of_n")
+    n = len(verifier_ids(doc))
+    doc["verification"]["rule"] = rule
+    if rule == "k_of_n":
+        k = int(tw.get("k") or n)
+        if not 1 <= k <= n:
+            raise RecipeError(f"k must be between 1 and {n}")
+        doc["verification"]["k"] = k
+
+
+def _hardware(doc, tw):
+    doc.update(qsite.hardware(doc, {k: v for k, v in tw.items() if v is not None}))
 
 
 def _test(doc, tw):
@@ -459,6 +522,20 @@ TWISTS: Dict[str, Dict[str, Any]] = {
                           "vy": _f("number", "Speed y (m/s)", 0.0), "vz": _f("number", "Speed z (m/s)", 0.0, dims=3),
                           "interval_ms": _f("number", "Time between rounds (ms)", 1.0),
                           "tracked": _f("number", "Verifiers follow the path (1 = exactly, 0 = not at all)", 0.0)}},
+    "verifier_fault": {"label": "A verifier is broken or dishonest", "apply": _verifier_fault,
+                       "fields": {"verifier": _f("verifier", "Verifier", "V2"),
+                                  "fault": _f("choice", "Fault", "offline", choices=list(FAULTS))}},
+    "rule": {"label": "How many verifiers must accept", "apply": _rule,
+             "fields": {"rule": _f("choice", "Rule", "k_of_n", choices=["all", "any", "k_of_n"]),
+                        "k": _f("number", "k (for k_of_n)", 2)}},
+    "hardware": {"label": "Real links and detectors", "apply": _hardware,
+                 "fields": {"links": _f("choice", "Honest signals travel by", "fibre", choices=["fibre", "free_space"]),
+                            "route_factor": _f("number", "Fibre route / straight distance", 1.4),
+                            "fibre_speed": _f("number", "Speed in fibre (fraction of c)", 0.68),
+                            "db_per_km": _f("number", "Fibre loss (dB/km)", 0.2),
+                            "efficiency": _f("number", "Detector efficiency", 0.8),
+                            "dark_count": _f("number", "False clicks per measurement", 0.001),
+                            "jitter_ns": _f("number", "Timing jitter (ns)", 0.05)}},
     "test": {"label": "Judge over many rounds", "apply": _test,
              "fields": {"rounds": _f("number", "Rounds", 88),
                         "min_correct": _f("number", "Fraction of answered rounds that must be right", 1.0),
@@ -475,7 +552,14 @@ BASE_FIELDS = {
     "policy": _f("choice", "Measurement policy", "breidbart", choices=list(POLICIES)),
     "combine": _f("choice", "Basis from shares", "xor", choices=list(qa.COMBINES)),
     "bases": _f("choice", "Measurement bases (2 = BB84)", 2, choices=[2, 3, 4, 6, 8]),
+    "protocol": _f("choice", "Protocol", "bb84", choices=list(qprotocols.PROTOCOLS)),
+    "qudit_d": _f("choice", "Qudit dimension d (qudit protocol)", 4, choices=list(qprotocols.mub.DIMENSIONS)),
+    "f": _f("choice", "Function f (BB84^f)", "inner_product", choices=list(qprotocols.F_FUNCTIONS)),
+    "f_bits": _f("choice", "Bits per string n (BB84^f)", 2, choices=[1, 2, 3, 4]),
+    "pairs": _f("number", "EPR pairs for the budget attack (BB84^f; empty = 2^n)", None),
+    "site": _f("choice", "Real site", "none", choices=["none"] + list(qsite.SITES)),
 }
+_PROTOCOL_KEYS = {"protocol", "qudit_d", "f", "f_bits", "pairs", "site"}
 _BUILD_KEYS = {"dim", "verifiers", "radius_m", "claim", "tolerance_ns", "combine", "share_bits", "policy",
                "processing_ns", "displacement_m", "seed", "bases"}
 
@@ -485,7 +569,9 @@ def schema() -> Dict[str, Any]:
     return {"base": BASE_FIELDS,
             "twists": {k: {"label": t["label"], "fields": t["fields"]} for k, t in TWISTS.items()},
             "strategies": {k: s["label"] for k, s in STRATEGIES.items()},
-            "answerers": {a: LABELS[a] for a in ANSWERERS}}
+            "answerers": {**{a: LABELS[a] for a in ANSWERERS}, **qprotocols.LABELS},
+            "protocols": {k: {"label": v["label"], "answerers": v["answerers"]} for k, v in qprotocols.PROTOCOLS.items()},
+            "sites": {k: v["label"] for k, v in qsite.SITES.items()}}
 
 
 def compose(recipe: Dict[str, Any]) -> Dict[str, Any]:
@@ -494,17 +580,40 @@ def compose(recipe: Dict[str, Any]) -> Dict[str, Any]:
         raise RecipeError("a recipe is an object with 'base' and 'twists'")
     base = dict(recipe.get("base") or {})
     who = base.pop("who", "honest")
+    proto = {k: base.pop(k) for k in list(base) if k in _PROTOCOL_KEYS}
     args = {k: v for k, v in base.items() if k in _BUILD_KEYS and v is not None}
     unknown = set(base) - _BUILD_KEYS
     if unknown:
         raise RecipeError(f"unknown base field(s): {', '.join(sorted(unknown))}")
-    if who in PROVERS:
-        args["prover"] = who
-    elif who in ANSWERERS:
-        args["attack"] = who
-    else:
-        raise RecipeError(f"unknown 'who' {who!r}; choose from {', '.join(ANSWERERS)}")
-    doc = build(**args)
+    protocol = proto.get("protocol") or "bb84"
+    site_name = proto.get("site") or "none"
+    if protocol not in qprotocols.PROTOCOLS:
+        raise RecipeError(f"unknown protocol {protocol!r}; choose from {', '.join(qprotocols.PROTOCOLS)}")
+    if who not in qprotocols.PROTOCOLS[protocol]["answerers"]:
+        raise RecipeError(f"unknown 'who' {who!r} for {protocol}; choose from "
+                          f"{', '.join(qprotocols.PROTOCOLS[protocol]['answerers'])}")
+    if site_name != "none":
+        if site_name not in qsite.SITES:
+            raise RecipeError(f"unknown site {site_name!r}; choose from {', '.join(qsite.SITES)}")
+        args.update(dim=2, verifiers=len(qsite.SITES[site_name]["verifiers"]))
+    try:
+        if protocol == "bb84":
+            if who in PROVERS:
+                args["prover"] = who
+            else:
+                args["attack"] = who
+            doc = build(**{**args, **({"prover": "honest", "attack": "none"} if site_name != "none" else {})})
+        else:
+            extra = {"d": proto.get("qudit_d") or 4, "n_bits": proto.get("f_bits") or 2, "f": proto.get("f") or "inner_product",
+                     "pairs": proto.get("pairs")}
+            build_args = {k: v for k, v in args.items() if k not in ("combine", "share_bits", "policy", "bases")}
+            doc = qprotocols.build(protocol, "honest" if site_name != "none" else who, **extra, **build_args)
+        if site_name != "none":  # move to the site first, then put whoever answers in place
+            doc = qsite.place(doc, site_name)
+            doc = switch_attack(doc, who, args.get("policy", "breidbart")) if who != "honest" else doc
+            doc["meta"]["site"].update(qsite.summary(doc))
+    except ValueError as exc:
+        raise RecipeError(str(exc)) from None
     for i, tw in enumerate(recipe.get("twists") or []):
         spec = TWISTS.get((tw or {}).get("type"))
         if spec is None:

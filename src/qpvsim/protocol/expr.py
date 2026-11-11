@@ -79,7 +79,13 @@ PURE_FUNCTIONS: Dict[str, Callable[..., Any]] = {
     "sqrt": math.sqrt, "cos": math.cos, "sin": math.sin, "exp": math.exp, "log": math.log,
     "floor": math.floor, "ceil": math.ceil,
     "xor": _xor, "distance": _distance, "combine": _combine,
+    "mub_unscramble": lambda d, basis, outcome, frame: _mub().unscramble(d, basis, outcome, frame),
 }
+
+
+def _mub():
+    from ..qpv import mub  # numpy-only module; imported on first use
+    return mub
 
 # functions bound by the engine to the participant's context (see engine._functions)
 ENGINE_FUNCTIONS = {

@@ -25,6 +25,7 @@ PRESETS: Dict[str, Dict[str, Any]] = {
     "loss": {"label": "Photon loss on the quantum links", "unit": "p", "range": [0.0, 0.9, 6]},
     "photons": {"label": "Average photons per laser pulse", "unit": "photons", "range": [0.1, 2.0, 6]},
     "dark_count": {"label": "Detector false clicks (prover or attackers)", "unit": "p", "range": [0.0, 0.5, 6]},
+    "pairs": {"label": "EPR pairs the attackers share (BB84^f budget attack)", "unit": "pairs", "range": [0.0, 4.0, 5]},
     "attack": {"label": "Who answers at the claim", "unit": "", "values": list(ANSWERERS)},
 }
 
@@ -32,6 +33,9 @@ PRESETS: Dict[str, Dict[str, Any]] = {
 def apply(project: Dict[str, Any], name: str, value: Any) -> Dict[str, Any]:
     if name == "attack":
         return switch_attack(project, value)
+    if name == "pairs":
+        from .protocols import set_pairs
+        return set_pairs(project, value)
     if name not in PRESETS:
         raise ValueError(f"unknown preset {name!r}; choose from {', '.join(PRESETS)}")
     doc = normalize(copy.deepcopy(project))
@@ -79,6 +83,11 @@ def apply(project: Dict[str, Any], name: str, value: Any) -> Dict[str, Any]:
 
 def reference(project: Dict[str, Any], attack: str) -> Dict[str, Any]:
     """The known acceptance probability of a noise-free round, where theory gives one."""
+    from .protocols import LABELS as PLABELS, protocol_of, reference as proto_reference
+    if protocol_of(project) != "bb84":
+        r = proto_reference(project, attack)
+        return {"value": r["value"] if r else None, "label": LABELS.get(attack) or PLABELS.get(attack, attack),
+                "source": r["source"] if r else "not available for this protocol"}
     n = len(verifier_ids(project))
     e0 = next((p for p in project["participants"] if p["id"] == "E0"), {})
     fixed = (e0.get("params") or {}).get("policy", "breidbart") != "breidbart"
@@ -99,7 +108,9 @@ def reference(project: Dict[str, Any], attack: str) -> Dict[str, Any]:
 def answerer(project: Dict[str, Any]) -> str:
     """Who answers at the claim, from the strategies in use ('' when the setup is not a standard one)."""
     autos = " ".join(p["automaton"] for p in project["participants"] if p["id"] not in set(verifier_ids(project)))
-    for key, who in (("qpv_adv_chain", "teleport"), ("qpv_adv_unentangled", "unentangled"), ("qpv_adv_guess", "guess"),
+    for key, who in (("qpv_adv_chain", "teleport"), ("qpv_adv_teleport_qudit", "teleport"), ("qpv_adv_budget", "budget"),
+                     ("qpv_adv_linear", "linear"), ("qpv_adv_relay", "relay"),
+                     ("qpv_adv_unentangled", "unentangled"), ("qpv_adv_guess", "guess"),
                      ("qpv_adv_split", "split"), ("qpv_adv_lossy", "lossy")):
         if key in autos:
             return who
@@ -113,8 +124,27 @@ def theory(project: Dict[str, Any], name: str, values: List[Any]) -> Dict[str, A
     """Per-round acceptance that theory predicts at each value of a preset, where a simple formula exists.
 
     The formulas assume the rest of the setup is ideal (no other noise, loss or timing error)."""
+    from .protocols import protocol_of, reference as proto_reference
     who = answerer(project)
     n = len(verifier_ids(project))
+    proto = protocol_of(project)
+    if proto != "bb84":
+        cfg = project["meta"]["qpv"]
+        ref = proto_reference(project, who) if who else None
+        base_v = ref["value"] if ref else None
+
+        def g(v):
+            v = float(v)
+            if name == "pairs" and who == "budget":
+                return v / cfg["size"] + (1 - v / cfg["size"]) * BREIDBART
+            if name == "loss" and base_v is not None and who != "displaced":
+                k = mub_qubits(cfg) if who in ("honest", "teleport", "unentangled") else 1
+                return (1 - v) ** k * base_v if proto != "classical" else base_v
+            return None
+        pts = [g(v) for v in values]
+        return {"answerer": who, "label": LABELS.get(who, who), "values": values, "theory": pts,
+                "note": "Theory assumes the rest of the setup is ideal: no other noise, loss or timing error."
+                if any(p is not None for p in pts) else "No simple formula for this combination."}
     m = bases_of(project) if who else 2
     e0 = next((p for p in project["participants"] if p["id"] == "E0"), {})
     breid = BREIDBART if (e0.get("params") or {}).get("policy", "breidbart") == "breidbart" else 0.75
@@ -151,3 +181,8 @@ def theory(project: Dict[str, Any], name: str, values: List[Any]) -> Dict[str, A
     return {"answerer": who, "label": LABELS.get(who, ""), "values": values, "theory": points,
             "note": "Theory assumes the rest of the setup is ideal: no other noise, loss or timing error."
             if any(p is not None for p in points) else "No simple formula for this combination."}
+
+
+def mub_qubits(cfg: Dict[str, Any]) -> int:
+    """Qubits that carry one challenge photon: log2(d) for a qudit (each can be lost on its own), else 1."""
+    return int(cfg["d"]).bit_length() - 1 if cfg.get("protocol") == "qudit" else 1

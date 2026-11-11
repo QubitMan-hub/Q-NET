@@ -58,6 +58,11 @@ ACTIONS: Dict[str, Dict[str, Any]] = {
                 "doc": "Projective measurement; basis Z/X/Y/angle or 0(Z)/1(X)."},
     "bell_measure": {"required": ["qubits", "results"], "exprs": [],
                      "doc": "Bell-state measurement (CNOT, H, Z-measure both)."},
+    "prepare_mub": {"required": ["qubits", "value", "basis", "dim"], "exprs": ["value", "basis", "dim"],
+                    "doc": "Prepare a qudit of dimension dim = 2^k in k slots: value 0..dim-1 of mutually unbiased "
+                           "basis 0..dim (basis 0 = computational)."},
+    "measure_mub": {"required": ["qubits", "basis", "dim", "result"], "exprs": ["basis", "dim"],
+                    "doc": "Measure the qudit held in k slots in mutually unbiased basis 0..dim; result 0..dim-1."},
     "discard": {"required": ["qubit"], "exprs": [], "doc": "Discard a qubit (partial trace)."},
     "timer": {"required": ["name"], "exprs": ["after_ns", "at_ns", "after_fs", "at_fs"],
               "doc": "Arm a named timer after a delay or at an absolute local time."},
@@ -179,6 +184,8 @@ def automaton_operations(spec: Dict[str, Any]) -> Dict[str, Set[str]]:
             ops["ops"].add(op)
             if op == "gate":
                 ops["gates"].add(str(a.get("gate", "")).upper())
+            if op == "measure_mub":
+                ops["bases"].add("mub")
             if op == "measure":
                 b = a.get("basis", "Z")
                 if isinstance(b, str) and b.strip("'\"") in ("Z", "X", "Y", "angle"):

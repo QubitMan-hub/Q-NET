@@ -28,7 +28,7 @@ from .protocol.automaton import ACTIONS, TRIGGER_TYPES, port_kinds
 from .protocol.capabilities import ROLE_PROFILES, profile_catalog
 from .protocol.expr import ENGINE_FUNCTIONS, PURE_FUNCTIONS
 from .protocol.project import normalize, participant, validate_project, verifier_ids, verifier_type
-from .qpv import lightcone, presets, recipe, scenario
+from .qpv import lightcone, presets, protocols, recipe, scenario
 from .qpv import report as qreport
 from .qpv import rounds as qrounds
 from .qpv import timing as qtiming
@@ -87,6 +87,7 @@ class WebAPI:
         R("POST", r"/api/qpv/theory", self.qpv_theory)
         R("POST", r"/api/qpv/rounds", self.qpv_rounds)
         R("POST", r"/api/qpv/report", self.qpv_report_row)
+        R("POST", r"/api/qpv/compare", self.qpv_compare)
         R("POST", r"/api/qpv/report/render", self.qpv_report_render)
         R("POST", r"/api/experiments", self.start_experiment)
         R("GET", r"/api/experiments/(?P<job>\w+)", self.get_experiment)
@@ -174,12 +175,15 @@ class WebAPI:
         except ValueError:
             qpv = False
         return self.ok({"dimension": dimension(p), "qpv": qpv, "timing": timing,
-                        "references": {a: presets.reference(p, a) for a in scenario.ANSWERERS},
+                        "protocol": protocols.protocol_of(p), "site": p["meta"].get("site"),
+                        "references": {a: presets.reference(p, a) for a in protocols.PROTOCOLS[protocols.protocol_of(p)]["answerers"]},
                         "default_tau_ns": lightcone.default_tau_ns(p)})
 
     def qpv_scenarios(self, **_) -> Result:
         return self.ok({"ready": scenario.READY, "demos": recipe.demos(), "recipe": recipe.schema(),
-                        "answerers": {a: scenario.LABELS[a] for a in scenario.ANSWERERS},
+                        "answerers": {**{a: scenario.LABELS[a] for a in scenario.ANSWERERS}, **protocols.LABELS},
+                        "protocols": {k: {"label": v["label"], "answerers": v["answerers"]} for k, v in protocols.PROTOCOLS.items()},
+                        "comparison": protocols.COMPARISON,
                         "provers": scenario.PROVERS, "attacks": scenario.ATTACKS, "policies": scenario.POLICIES,
                         "combines": COMBINES, "presets": presets.PRESETS})
 
@@ -237,6 +241,10 @@ class WebAPI:
             out["needed"] = qrounds.rounds_needed(float(body["p_honest"]), float(body["p_cheat"]),
                                                   float(body.get("risk", 1e-6)))
         return self.ok(out)
+
+    def qpv_compare(self, body=None, **_) -> Result:
+        body = body or {}
+        return self.ok(protocols.compare_cell(body.get("recipe") or {}, int(body.get("rounds", 300)), int(body.get("seed", 21))))
 
     def qpv_report_row(self, body=None, **_) -> Result:
         body = body or {}

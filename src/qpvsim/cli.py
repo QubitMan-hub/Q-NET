@@ -67,6 +67,11 @@ def main(argv=None) -> int:
     p.add_argument("--format", choices=["md", "csv", "html"], help="default: from the --out extension, else md")
     p.add_argument("--out", help="write the report here (default: print it)")
 
+    p = sub.add_parser("protocols", help="compare the protocols side by side (honest, guessing, unentangled and "
+                                         "entangled cheaters)")
+    p.add_argument("--rounds", type=int, default=300)
+    p.add_argument("--seed", type=int, default=21)
+
     p = sub.add_parser("rounds", help="how many rounds separate an honest prover from a cheater")
     p.add_argument("--honest", type=float, required=True, help="honest prover's per-round pass rate, e.g. 0.98")
     p.add_argument("--cheat", type=float, required=True, help="best cheater's per-round pass rate, e.g. 0.854")
@@ -105,6 +110,23 @@ def main(argv=None) -> int:
         else:
             print(text, end="")
         return 0 if all(r["ok"] for r in rows) else 3
+    if a.cmd == "protocols":
+        from .qpv import protocols as qprot
+        cols = qprot.COMPARISON["columns"]
+        print(f"{'':44}" + "".join(f"{c['label'][:24]:>26}" for c in cols))
+        for row in qprot.COMPARISON["rows"]:
+            cells = []
+            for c in cols:
+                cell = row["cells"].get(c["id"])
+                if not cell:
+                    cells.append(f"{'-':>26}")
+                    continue
+                r = qprot.compare_cell(cell["recipe"], a.rounds, a.seed)
+                th = "" if r["theory"] is None else f" (theory {100 * r['theory']:.0f}%)"
+                cells.append(f"{f'{100 * r[chr(112)]:.0f}%{th}':>26}")
+            print(f"{row['label'][:44]:44}" + "".join(cells))
+        print("\n" + qprot.COMPARISON["note"])
+        return 0
     if a.cmd == "rounds":
         from .qpv import rounds as qrounds
         r = qrounds.rounds_needed(a.honest, a.cheat, a.risk)

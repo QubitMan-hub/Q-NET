@@ -5,7 +5,8 @@
   "C": "Cheaters without entanglement",
   "D": "Cheaters with entanglement",
   "E": "Special locations and identity",
-  "F": "Lost photons, faster routes and leaks"
+  "F": "Lost photons, faster routes and leaks",
+  "G": "Beyond basic BB84: more protocols, real sites, faulty verifiers"
  },
  "demos": [
   {
@@ -1259,6 +1260,352 @@
       "type": "place",
       "party": "P",
       "x": -1.0
+     }
+    ]
+   }
+  },
+  {
+   "id": "g1_sixstate_cheaters",
+   "section": "G",
+   "title": "G1 · Six-state protocol (3 bases) against cheaters without entanglement",
+   "who": "cheat",
+   "expect": "About 67% of rounds (85% with two bases).",
+   "watch": "The verifiers pick one of three bases, Z, X or Y. Guessing the basis is right only a third of the time, so the cheaters' best simple strategy drops from 85% to 2/3.",
+   "expect_rate": [
+    0.6,
+    0.74
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "protocol": "qudit",
+     "qudit_d": 2,
+     "who": "unentangled"
+    },
+    "twists": []
+   }
+  },
+  {
+   "id": "g1_qudit8_cheaters",
+   "section": "G",
+   "title": "G1 · Qudit with 8 levels (9 bases) against the same cheaters",
+   "who": "cheat",
+   "expect": "About 22% of rounds.",
+   "watch": "The photon now carries one of 8 values (on 3 qubits) in one of 9 bases. A wrong basis guess gives a random value out of 8, so guessing cheaters get 2/9.",
+   "expect_rate": [
+    0.16,
+    0.29
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "protocol": "qudit",
+     "qudit_d": 8,
+     "who": "unentangled"
+    },
+    "twists": []
+   }
+  },
+  {
+   "id": "g1_qudit_honest",
+   "section": "G",
+   "title": "G1 · Qudit with 4 levels, honest prover in 2D",
+   "who": "honest",
+   "expect": "Accepted every round.",
+   "watch": "Three verifiers around the claim; the basis is the sum of two shares mod 5. The honest prover waits for everything and measures in the right basis.",
+   "expect_rate": [
+    1,
+    1
+   ],
+   "recipe": {
+    "base": {
+     "dim": 2,
+     "protocol": "qudit",
+     "qudit_d": 4,
+     "who": "honest"
+    },
+    "twists": []
+   }
+  },
+  {
+   "id": "g1_qudit_teleport",
+   "section": "G",
+   "title": "G1 · Qudit with 4 levels: two entangled pairs still break it",
+   "who": "cheat",
+   "expect": "The cheaters pass every round.",
+   "watch": "Bigger quantum systems make guessing harder but do not stop teleportation: two EPR pairs carry the 4-level qudit, and the Bell results tell the cheaters how the outcome was shuffled.",
+   "expect_rate": [
+    1,
+    1
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "protocol": "qudit",
+     "qudit_d": 4,
+     "who": "teleport"
+    },
+    "twists": []
+   }
+  },
+  {
+   "id": "g2_f_budget_small",
+   "section": "G",
+   "title": "G2 · BB84^f, random f with 3-bit strings: cheaters with 1 EPR pair",
+   "who": "cheat",
+   "expect": "About 87% of rounds: barely better than without entanglement.",
+   "watch": "V0 sends the photon and a 3-bit string x, V1 a 3-bit string y; the basis is f(x, y). The generic attack needs a pair for every possible x (8). With 1 pair it only helps when x = 0. Use Chart... with 'EPR pairs' to see the climb to 100%.",
+   "expect_rate": [
+    0.82,
+    0.93
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "protocol": "bb84f",
+     "f": "random",
+     "f_bits": 3,
+     "pairs": 1,
+     "who": "budget"
+    },
+    "twists": []
+   }
+  },
+  {
+   "id": "g2_f_budget_full",
+   "section": "G",
+   "title": "G2 · The same protocol: cheaters with all 8 EPR pairs",
+   "who": "cheat",
+   "expect": "The cheaters pass every round.",
+   "watch": "With one pair for every possible x, E0 teleports the photon into pair x and E1 measures every pair j in basis f(j, y). The honest prover still handles one photon and 6 bits; the attack needs 2^n pairs.",
+   "expect_rate": [
+    1,
+    1
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "protocol": "bb84f",
+     "f": "random",
+     "f_bits": 3,
+     "pairs": 8,
+     "who": "budget"
+    },
+    "twists": []
+   }
+  },
+  {
+   "id": "g2_f_linear",
+   "section": "G",
+   "title": "G2 · A bad choice of f: xor of parities falls to one EPR pair",
+   "who": "cheat",
+   "expect": "The cheaters pass every round.",
+   "watch": "If f(x, y) = parity(x) xor parity(y), E0 can apply its half of the basis before teleporting, so one pair is enough. The function f must be hard, not just long.",
+   "expect_rate": [
+    1,
+    1
+   ],
+   "recipe": {
+    "base": {
+     "dim": 1,
+     "protocol": "bb84f",
+     "f": "xor",
+     "f_bits": 3,
+     "who": "linear"
+    },
+    "twists": []
+   }
+  },
+  {
+   "id": "g3_classical_relay",
+   "section": "G",
+   "title": "G3 · Classical position verification: colluders always win",
+   "who": "cheat",
+   "expect": "The cheaters pass every round.",
+   "watch": "Without a qubit there is nothing that cannot be copied: each colluder forwards its verifier's bit and everyone answers the xor in time. This is why position verification needs quantum physics.",
+   "expect_rate": [
+    1,
+    1
+   ],
+   "recipe": {
+    "base": {
+     "dim": 2,
+     "protocol": "classical",
+     "who": "relay"
+    },
+    "twists": []
+   }
+  },
+  {
+   "id": "g4_campus",
+   "section": "G",
+   "title": "G4 · University campus with free-space links (400 m)",
+   "who": "honest",
+   "expect": "About 80% of rounds (the detector misses 20% of photons); location known to about ±9 cm.",
+   "watch": "Three verifiers on rooftops 400 m from the claim send light straight through the air. Open the Geometry map: positions come from real coordinates.",
+   "expect_rate": [
+    0.73,
+    0.87
+   ],
+   "recipe": {
+    "base": {
+     "site": "campus",
+     "who": "honest"
+    },
+    "twists": []
+   }
+  },
+  {
+   "id": "g4_city_honest",
+   "section": "G",
+   "title": "G4 · City centre over street fibre (5 km)",
+   "who": "honest",
+   "expect": "About 57% of rounds (43% of photons lost); location known only to about ±3 km.",
+   "watch": "The verifiers reach the claim through fibre that winds 1.5 times the straight distance at 2/3 of light speed. They allow for it by sending early, which hands anyone with a straight path about 20 µs to spare.",
+   "expect_rate": [
+    0.49,
+    0.65
+   ],
+   "recipe": {
+    "base": {
+     "site": "city",
+     "who": "honest"
+    },
+    "twists": []
+   }
+  },
+  {
+   "id": "g4_city_impostor",
+   "section": "G",
+   "title": "G4 · City centre: an impostor 2 km from the claim",
+   "who": "cheat",
+   "expect": "The impostor passes every round, more often than the honest prover.",
+   "watch": "Standing 2 km away with straight line-of-sight links, the impostor still answers in time, and loses no photons in fibre. Over fibre, the check proves almost nothing.",
+   "expect_rate": [
+    1,
+    1
+   ],
+   "recipe": {
+    "base": {
+     "site": "city",
+     "who": "displaced"
+    },
+    "twists": [
+     {
+      "type": "place",
+      "party": "P",
+      "x": -2000,
+      "y": 0
+     }
+    ]
+   }
+  },
+  {
+   "id": "g5_offline_all",
+   "section": "G",
+   "title": "G5 · One verifier offline, all three must accept",
+   "who": "honest",
+   "expect": "Rejected every round.",
+   "watch": "V2 sends its share but never reports. With the rule 'all must accept', one broken verifier blocks every honest prover.",
+   "expect_rate": [
+    0,
+    0
+   ],
+   "recipe": {
+    "base": {
+     "dim": 2,
+     "who": "honest"
+    },
+    "twists": [
+     {
+      "type": "verifier_fault",
+      "verifier": "V2",
+      "fault": "offline"
+     }
+    ]
+   }
+  },
+  {
+   "id": "g5_offline_2of3",
+   "section": "G",
+   "title": "G5 · The same broken verifier, 2 of 3 must accept",
+   "who": "honest",
+   "expect": "Accepted every round.",
+   "watch": "Requiring only two of the three verifiers keeps the system working while V2 is down.",
+   "expect_rate": [
+    1,
+    1
+   ],
+   "recipe": {
+    "base": {
+     "dim": 2,
+     "who": "honest"
+    },
+    "twists": [
+     {
+      "type": "verifier_fault",
+      "verifier": "V2",
+      "fault": "offline"
+     },
+     {
+      "type": "rule",
+      "rule": "k_of_n",
+      "k": 2
+     }
+    ]
+   }
+  },
+  {
+   "id": "g5_corrupt_all",
+   "section": "G",
+   "title": "G5 · A corrupt verifier that accepts anything, all must accept",
+   "who": "cheat",
+   "expect": "Guessing cheaters pass about 25% of rounds instead of 12.5%.",
+   "watch": "V2 approves every answer, so the guessers only have to fool V0 and V1.",
+   "expect_rate": [
+    0.19,
+    0.32
+   ],
+   "recipe": {
+    "base": {
+     "dim": 2,
+     "who": "guess"
+    },
+    "twists": [
+     {
+      "type": "verifier_fault",
+      "verifier": "V2",
+      "fault": "always_accept"
+     }
+    ]
+   }
+  },
+  {
+   "id": "g5_corrupt_2of3",
+   "section": "G",
+   "title": "G5 · The same corrupt verifier under a 2-of-3 rule",
+   "who": "cheat",
+   "expect": "Guessing cheaters pass about 75% of rounds.",
+   "watch": "With 2 of 3 required and V2 approving everything, one lucky guess at V0 or V1 is enough. Tolerating broken verifiers makes a corrupt one far more dangerous.",
+   "expect_rate": [
+    0.68,
+    0.84
+   ],
+   "recipe": {
+    "base": {
+     "dim": 2,
+     "who": "guess"
+    },
+    "twists": [
+     {
+      "type": "verifier_fault",
+      "verifier": "V2",
+      "fault": "always_accept"
+     },
+     {
+      "type": "rule",
+      "rule": "k_of_n",
+      "k": 2
      }
     ]
    }
