@@ -66,7 +66,7 @@ export function Spacetime() {
     <div className="canvas-wrap" ref={ref}>
       <div className="canvas-tools">
         <Check checked={lightScale} onChange={setLightScale} label="Light rays at 45°" />
-        <Check checked={cones} onChange={setCones} label="Challenge light cones" />
+        <Check checked={cones} onChange={setCones} label="Light cones" />
         {dim && <button className="btn ghost" onClick={() => useStore.getState().setHighlightChain([])}>Clear causal path</button>}
       </div>
       <div className="st-legend">

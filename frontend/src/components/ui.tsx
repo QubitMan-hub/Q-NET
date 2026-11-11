@@ -1,14 +1,21 @@
-import { useEffect, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 /** Live content-box size of an element. */
 export function useSize(ref: RefObject<HTMLElement>) {
   const [size, setSize] = useState({ w: 800, h: 500 });
+  const watched = useRef<{ el: HTMLElement | null; ro: ResizeObserver | null }>({ el: null, ro: null });
+  // Runs after every render: the element may appear later (after an empty state), and must be measured then.
   useEffect(() => {
-    if (!ref.current) return;
+    const el = ref.current;
+    if (el === watched.current.el) return;
+    watched.current.ro?.disconnect();
+    watched.current = { el, ro: null };
+    if (!el) return;
     const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
-    ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, [ref]);
+    ro.observe(el);
+    watched.current.ro = ro;
+  });
+  useEffect(() => () => watched.current.ro?.disconnect(), []);
   return size;
 }
 

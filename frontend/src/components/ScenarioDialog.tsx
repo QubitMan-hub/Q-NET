@@ -4,7 +4,6 @@ import { storageGet, storageSet, useStore } from "../store";
 import { IN_BROWSER } from "../api";
 import { GLOSSARY } from "../glossary";
 import { Advanced, Check, Field, Icon, NumberInput, Select, TextInput } from "./ui";
-import { ScenarioList } from "./Demos";
 import { copyText, recipeLink } from "../links";
 
 /** An empty project for building a protocol from scratch in the editor. */
@@ -198,50 +197,72 @@ export function ScenarioDialog({ onClose, initial }: { onClose: () => void; init
   );
 }
 
-/** First visit: quick 1D/2D/3D runs and the whole scenario gallery, searchable. */
-export function StartScreen({ onClose, onBuild, onDemos, onEdit }: {
+/** First visit: three clear ways in, and the standard setups for anyone who wants to start from scratch. */
+export function StartScreen({ onClose, onBuild, onDemos }: {
   onClose: () => void; onBuild: () => void; onDemos: () => void; onEdit: (r: Recipe) => void;
 }) {
   const ready = useStore((s) => s.scenarios?.ready ?? []);
+  const count = useStore((s) => s.scenarios?.demos.demos.length ?? 0);
   const showAttacks = useStore((s) => s.showAttacks);
   const toggleAttacks = useStore((s) => s.toggleAttacks);
   const columns = showAttacks ? COLUMNS : COLUMNS.slice(0, 1);
   const open = async (id: string) => { onClose(); await buildAndRun({ id }); };
+  const watch = async (id: string) => {
+    onClose();
+    await useStore.getState().loadDemo(id);
+    await useStore.getState().reset();
+    await useStore.getState().animateRound();
+  };
+  const ways: [string, string, () => void, string][] = [
+    ["Watch an honest prover pass", "Two verifiers time a photon and its key to meet at one spot. See the answer come back in time.",
+      () => watch("a1_midway"), "start-watch-honest"],
+    ["Watch cheaters break it", "Two cheaters share one entangled pair and pass every round. The protocol's biggest weakness.",
+      () => watch("d1_teleport"), "start-watch-cheat"],
+    [`Browse all ${count} scenarios`, "Noise, lost photons, moving provers, real cities, other protocols. Each runs with one click.",
+      () => { onClose(); onDemos(); }, "start-demos"],
+  ];
   return (
-    <div className="welcome start" role="dialog" aria-labelledby="welcome-title" data-testid="start-screen">
-      <div className="start-hero">
-        <h2 id="welcome-title">Can a prover prove where it is?</h2>
-        <p>Verifiers send a photon and the key to read it so that both meet only at the claimed spot. Whoever answers there in time,
-          and correctly, is accepted. Run a case below{IN_BROWSER ? " right here in your browser" : ""} and see who gets through.</p>
-      </div>
-      <h3 className="start-h">Quick start</h3>
-      <table className="start-grid">
-        <thead><tr><th />{columns.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead>
-        <tbody>
-          {DIMS.map((d) => (
-            <tr key={d}>
-              <th>{d}D <span className="muted">{d === 1 ? "2 verifiers" : `${d + 1} verifiers`}</span></th>
-              {columns.map(([who]) => {
-                const r = ready.find((x) => x.id === `${d}d_${who}`);
-                return <td key={who}>{r && <button className="btn" onClick={() => open(r.id)} data-testid={`start-${r.id}`}>Run</button>}</td>;
-              })}
-            </tr>
+    <div className="dialog-backdrop" onClick={onClose}>
+      <div className="welcome start" role="dialog" aria-labelledby="welcome-title" data-testid="start-screen" onClick={(e) => e.stopPropagation()}>
+        <div className="start-hero">
+          <h2 id="welcome-title">Can a prover prove where it is?</h2>
+          <p>Quantum position verification checks a location with the speed of light and a photon that cannot be copied.
+            This workbench simulates it{IN_BROWSER ? ", right here in your browser" : ""}: honest provers, cheaters, real-world hardware.</p>
+        </div>
+        <div className="start-ways">
+          {ways.map(([title, text, fn, testid]) => (
+            <button key={testid} className="start-way" onClick={fn} data-testid={testid}>
+              <b>{title}</b><span>{text}</span><Icon.chevron />
+            </button>
           ))}
-        </tbody>
-      </table>
-      <label className="row small" style={{ marginBottom: 4 }}>
-        <input type="checkbox" checked={showAttacks} onChange={toggleAttacks} data-testid="show-attacks" />
-        Show attack examples (unentangled and entangled attackers)
-      </label>
-      <h3 className="start-h">All scenarios <span className="muted small">honest provers, cheaters, noise, loss, leaks</span></h3>
-      <ScenarioList compact onPicked={onClose} onEdit={onEdit} />
-      <p className="welcome-note">Results describe the model, not a security proof.{showAttacks && <> The unentangled attack wins about 85% of rounds
-        (cos²(π/8)); the teleportation attack, with entanglement, always wins.</>}</p>
-      <div className="row">
-        <button className="btn" onClick={() => { onClose(); onBuild(); }}>Build your own…</button>
-        <button className="btn" onClick={() => { onClose(); onDemos(); }} data-testid="start-demos">Open the gallery…</button>
-        <span className="grow" />
-        <button className="btn primary" onClick={onClose}>Start exploring</button>
+        </div>
+        <details className="start-more">
+          <summary>Start from a standard setup</summary>
+          <table className="start-grid">
+            <thead><tr><th />{columns.map(([, label]) => <th key={label}>{label}</th>)}</tr></thead>
+            <tbody>
+              {DIMS.map((d) => (
+                <tr key={d}>
+                  <th>{d}D <span className="muted">{d === 1 ? "2 verifiers" : `${d + 1} verifiers`}</span></th>
+                  {columns.map(([who]) => {
+                    const r = ready.find((x) => x.id === `${d}d_${who}`);
+                    return <td key={who}>{r && <button className="btn" onClick={() => open(r.id)} data-testid={`start-${r.id}`}>Run</button>}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <label className="row small">
+            <input type="checkbox" checked={showAttacks} onChange={toggleAttacks} data-testid="show-attacks" />
+            Include the cheaters (without and with entanglement)
+          </label>
+        </details>
+        <div className="row start-foot">
+          <button className="btn ghost" onClick={() => { onClose(); onBuild(); }}>Build your own</button>
+          <span className="grow" />
+          <span className="muted small">Results describe the model, not a security proof.</span>
+          <button className="btn primary" onClick={onClose}>Start exploring</button>
+        </div>
       </div>
     </div>
   );

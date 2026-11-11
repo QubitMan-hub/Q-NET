@@ -40,7 +40,45 @@ function useDrag(initial: number, axis: "x" | "y", invert = false, min = 120, ma
 }
 
 type Panels = { left: boolean; right: boolean; expert: boolean; toggle: (side: "left" | "right") => void; toggleExpert: () => void;
-  showWelcome: () => void; buildScenario: () => void; showDemos: () => void };
+  showWelcome: () => void; buildScenario: () => void; showDemos: () => void; showCompare: () => void; showReport: () => void };
+
+/** Overflow menu: everything a newcomer does not need on screen, one click away. */
+function MoreMenu({ panels, download, openFile }: { panels: Panels; download: () => void; openFile: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const s = useStore();
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", close);
+    return () => { window.removeEventListener("mousedown", close); window.removeEventListener("keydown", close); };
+  }, [open]);
+  const item = (label: string, hint: string, fn: () => void, testid?: string) => (
+    <button role="menuitem" onClick={() => { setOpen(false); fn(); }} data-testid={testid}><span>{label}</span><small>{hint}</small></button>
+  );
+  return (
+    <div className="more" ref={ref}>
+      <button className="btn ghost" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid="btn-more">
+        <span className="lbl lbl-keep">More</span><Icon.chevron /></button>
+      {open && (
+        <div className="more-menu" role="menu">
+          {item("Present scenarios", "Full screen, one case at a time", () => s.startPresentation("all"), "menu-present")}
+          {item("Scenario report", "Measured against expected, as a table", panels.showReport, "menu-report")}
+          <hr />
+          {item("Open project file…", "A saved .qpv.json", openFile)}
+          {item("Save project file", "Download this setup", download, "menu-save")}
+          <hr />
+          {item(panels.expert ? "Hide expert tools" : "Expert tools", "Protocol editor, step-by-step, event log", panels.toggleExpert)}
+          {item(s.theme === "light" ? "Dark theme" : "Light theme", "Switch colours", s.toggleTheme)}
+          {item("Getting started", "The welcome screen", panels.showWelcome)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Toolbar({ panels }: { panels: Panels }) {
   const s = useStore();
@@ -56,66 +94,75 @@ function Toolbar({ panels }: { panels: Panels }) {
     a.click();
     URL.revokeObjectURL(a.href);
   };
+  useEffect(() => {  // Ctrl+S when the save button is tucked into the menu
+    const onSave = () => download();
+    window.addEventListener("qpv-save", onSave);
+    return () => window.removeEventListener("qpv-save", onSave);
+  });
+  const status = s.simError ? ["error", "can't run"] : s.playing ? ["playing", "playing"]
+    : outcome === "accept" ? ["accept", "accepted"] : outcome === "reject" ? ["reject", "rejected"]
+    : !sim || sim.events_executed === 0 ? ["pending", "ready"] : sim.stopped ? ["pending", "stopped"] : ["pending", "paused"];
   return (
-    <div className="toolbar">
+    <div className={`toolbar${panels.expert ? " expert" : ""}`}>
       <div className="brand"><Brand /><span>QPV Workbench</span></div>
-      <div className="tool-group">
-        {panels.expert && <button className={`btn ghost${panels.left ? " active" : ""}`} title="Show or hide the palette" aria-pressed={panels.left}
-          onClick={() => panels.toggle("left")}><Icon.panelLeft /></button>}
+      {panels.expert && <div className="tool-group">
+        <button className={`btn ghost${panels.left ? " active" : ""}`} title="Show or hide the palette" aria-pressed={panels.left}
+          onClick={() => panels.toggle("left")}><Icon.panelLeft /></button>
         <button className={`btn ghost${panels.right ? " active" : ""}`} title="Show or hide the side panel" aria-pressed={panels.right}
           onClick={() => panels.toggle("right")}><Icon.panelRight /></button>
-      </div>
-      <input className="project-name" value={s.project?.meta.name ?? ""} aria-label="Project name" data-rev={s.revision}
-        onChange={(e) => s.edit((p) => { p.meta.name = e.target.value; })} />
-      <div className="tool-group">
-        {panels.expert && <select className="btn" style={{ width: 150 }} value="" aria-label="Open example" onChange={(e) => e.target.value && s.loadExample(e.target.value)}>
+      </div>}
+      {panels.expert
+        ? <input className="project-name" value={s.project?.meta.name ?? ""} aria-label="Project name" data-rev={s.revision}
+            onChange={(e) => s.edit((p) => { p.meta.name = e.target.value; })} />
+        : <h1 className="scenario-title" title={s.project?.meta.name}>{s.project?.meta.name}</h1>}
+      <nav className="tool-group primary-nav" aria-label="Main">
+        <button className="btn ghost" title="Ready-made scenarios and your own saved ones" onClick={panels.showDemos}
+          data-testid="btn-demos"><Icon.play /><span className="lbl lbl-keep">Scenarios</span></button>
+        <button className="btn ghost" title="Build a scenario: protocol, layout, who answers, twists" onClick={panels.buildScenario}
+          data-testid="btn-new"><Icon.plus /><span className="lbl">Build</span></button>
+        <button className="btn ghost" title="Every protocol against every kind of cheater" onClick={panels.showCompare}
+          data-testid="btn-compare-top"><Icon.layout /><span className="lbl">Compare</span></button>
+      </nav>
+      {panels.expert && <div className="tool-group">
+        <select className="btn" style={{ width: 132 }} value="" aria-label="Open example" onChange={(e) => e.target.value && s.loadExample(e.target.value)}>
           <option value="">Examples…</option>
           {Object.entries(s.meta?.examples ?? {}).map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
-        </select>}
-        <button className="btn ghost" title="New scenario: dimension, verifiers, claim, prover or attack (or a blank project)" onClick={panels.buildScenario}
-          data-testid="btn-new"><Icon.plus /><span className="lbl">New</span></button>
-        <button className="btn ghost" title="Scenarios: ready-made cases and your own saved ones" onClick={panels.showDemos}
-          data-testid="btn-demos"><Icon.play /><span className="lbl lbl-keep">Scenarios</span></button>
-        <button className="btn ghost" title="Open project file" onClick={() => fileRef.current?.click()}><Icon.open /><span className="lbl">Open</span></button>
-        <button className="btn ghost" title="Save project file (Ctrl+S)" onClick={download} data-testid="btn-save"><Icon.save /><span className="lbl">Save</span></button>
-        <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={async (e) => {
-          const f = e.target.files?.[0];
-          if (!f) return;
-          try { await s.openDocument(JSON.parse(await f.text()) as Project); } catch (err: any) { s.setToast(`Could not open ${f.name}: ${err.message}`, true); }
-          e.target.value = "";
-        }} />
-        <span className="tool-sep" />
+        </select>
+        <button className="btn ghost" title="Open project file" onClick={() => fileRef.current?.click()}><Icon.open /></button>
+        <button className="btn ghost" title="Save project file (Ctrl+S)" onClick={download} data-testid="btn-save"><Icon.save /></button>
         <button className="btn ghost" title="Undo (Ctrl+Z)" disabled={!s.past.length} onClick={s.undo}><Icon.undo /></button>
         <button className="btn ghost" title="Redo (Ctrl+Shift+Z)" disabled={!s.future.length} onClick={s.redo}><Icon.redo /></button>
-      </div>
+      </div>}
+      <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={async (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        try { await s.openDocument(JSON.parse(await f.text()) as Project); } catch (err: any) { s.setToast(`Could not open ${f.name}: ${err.message}`, true); }
+        e.target.value = "";
+      }} />
       <span className="grow" />
       <div className="tool-group" aria-label="Simulation controls">
-        <button className="btn ghost" title="Reset (R)" onClick={() => s.reset()} data-testid="btn-reset"><Icon.reset /><span className="lbl">Reset</span></button>
         {panels.expert && <>
-        <button className="btn ghost" title="Execute one event (N)" disabled={!sim || sim.stopped} onClick={() => s.step(1)} data-testid="btn-step"><Icon.step /><span className="lbl">Step</span></button>
-        <button className={`btn ${s.playing ? "active" : "ghost"}`} title="Play: advance engine time continuously (Space)" disabled={!sim || sim.stopped}
-          onClick={() => s.setPlaying(!s.playing)} data-testid="btn-play">{s.playing ? <Icon.pause /> : <Icon.play />}<span className="lbl">{s.playing ? "Pause" : "Play"}</span></button>
-        <select className="btn rate" value={s.playRate} title="Playback rate (simulated ns per second)" aria-label="Playback rate"
-          onChange={(e) => s.setPlayRate(Number(e.target.value))}>
-          {[0.5, 1, 2, 4, 10, 25].map((r) => <option key={r} value={r}>{r} ns/s</option>)}
-        </select>
+          <button className="btn ghost" title="Reset (R)" onClick={() => s.reset()} data-testid="btn-reset"><Icon.reset /><span className="lbl">Reset</span></button>
+          <button className="btn ghost" title="Execute one event (N)" disabled={!sim || sim.stopped} onClick={() => s.step(1)} data-testid="btn-step"><Icon.step /><span className="lbl">Step</span></button>
+          <button className={`btn ${s.playing ? "active" : "ghost"}`} title="Advance engine time continuously (Space)" disabled={!sim || sim.stopped}
+            onClick={() => s.setPlaying(!s.playing)} data-testid="btn-play">{s.playing ? <Icon.pause /> : <Icon.play />}<span className="lbl">{s.playing ? "Pause" : "Play"}</span></button>
+          <select className="btn rate" value={s.playRate} title="Playback rate (simulated ns per second)" aria-label="Playback rate"
+            onChange={(e) => s.setPlayRate(Number(e.target.value))}>
+            {[0.5, 1, 2, 4, 10, 25].map((r) => <option key={r} value={r}>{r} ns/s</option>)}
+          </select>
         </>}
         {s.playing
           ? <button className="btn primary" title="Skip to the end of the round (E)" onClick={() => s.runToEnd()} data-testid="btn-run"><Icon.end /><span className="lbl lbl-keep">Skip to end</span></button>
           : <button className="btn primary" title="Play the round: watch the qubit and the basis travel (E skips to the end)" disabled={!sim || sim.stopped}
             onClick={() => s.animateRound()} data-testid="btn-run"><Icon.play /><span className="lbl lbl-keep">Run</span></button>}
       </div>
-      <div className="clock" title="Global simulation time (engine clock)">
-        <span className="t" data-testid="clock">{sim ? nsLabel(sim.now_fs, 6) : "—"}</span>
-        <span className="xs mono muted">{sim ? `${sim.events_executed} events · ${sim.pending.length} pending` : s.simError ? "invalid project" : "—"}</span>
+      <div className="status" title="Engine time and the verifiers' decision">
+        <span className="t mono" data-testid="clock">{sim ? nsLabel(sim.now_fs, panels.expert ? 6 : 3) : "—"}</span>
+        <span className={`status-pill ${status[0]}`} data-testid="outcome" data-rev={sim?.revision ?? ""}>{status[1]}</span>
       </div>
-      <span className={`status-pill ${s.simError ? "error" : outcome ?? "pending"}`} data-testid="outcome" data-rev={sim?.revision ?? ""}>
-        {s.simError ? "cannot run" : outcome === "accept" ? "accepted" : outcome === "reject" ? "rejected" : sim?.stopped ? "stopped" : "running"}
-      </span>
       <button className={`btn ghost${panels.expert ? " active" : ""}`} aria-pressed={panels.expert} onClick={panels.toggleExpert} data-testid="btn-expert"
-        title="Expert tools: palette, protocol editor, step-by-step playback, event log, experiments">Expert</button>
-      <button className="btn ghost" title="Getting started" aria-label="Getting started" onClick={panels.showWelcome}><Icon.help /></button>
-      <button className="btn ghost" title="Toggle dark theme" onClick={s.toggleTheme}><Icon.theme /></button>
+        title="Expert tools: palette, protocol editor, step-by-step playback, event log, experiments"><span className="lbl lbl-keep">Expert</span></button>
+      <MoreMenu panels={panels} download={download} openFile={() => fileRef.current?.click()} />
     </div>
   );
 }
@@ -227,13 +274,18 @@ export default function App() {
       storageSet(EXPERT_KEY, v ? null : "1");
       const st = useStore.getState();
       if (v && !SIMPLE_TABS.includes(st.dock)) st.setDock("decision");
-      if (v && st.view === "automaton") st.setView("network");
+      if (v && st.view !== "spacetime") st.setView("spacetime");
+      if (!v) setDockOpen(true);
       return !v;
     }),
     showWelcome: () => setWelcome(true),
     buildScenario: () => setBuilder({ initial: null }),
     showDemos: () => setDemos(true),
+    showCompare: () => setCompare(true),
+    showReport: () => setReport(true),
   };
+  // Simple mode folds the details dock down to its tab row until someone opens it.
+  const [dockOpen, setDockOpen] = useState(() => storageGet(EXPERT_KEY) === "1");
   const closeWelcome = () => { setWelcome(false); storageSet(WELCOME_KEY, "1"); };
   // Give the canvas room when the window becomes narrow (panels can be reopened).
   useEffect(() => {
@@ -274,7 +326,8 @@ export default function App() {
       if (mod && e.key.toLowerCase() === "y") { if (typing) return; e.preventDefault(); st.redo(); return; }
       if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        (document.querySelector('button[title^="Save project"]') as HTMLButtonElement | null)?.click();
+        (document.querySelector('[data-testid="btn-save"], [data-testid="menu-save"]') as HTMLButtonElement | null)?.click()
+          ?? window.dispatchEvent(new CustomEvent("qpv-save"));
         return;
       }
       if (typing) return;
@@ -307,16 +360,19 @@ export default function App() {
   const errors = s.issues.filter((i) => i.level === "error").length;
   const warnings = s.issues.filter((i) => i.level === "warning").length;
   const dock = expert || SIMPLE_TABS.includes(s.dock) ? s.dock : "decision";
+  const view = expert ? s.view : "spacetime";  // the engineering diagrams belong to the expert tools
+  const showDock = expert || dockOpen;
+  const showRight = right || !expert;  // the scenario panel is the heart of simple mode: never hide it
   const focusAut = s.project.participants.find((p) => p.id === s.focus)?.automaton;
   return (
-    <div className="app">
+    <div className={`app ${expert ? "expert" : "simple"}`}>
       <Toolbar panels={panels} />
-      <div className="workspace" style={{ gridTemplateColumns: `${panels.left ? leftW : 0}px ${panels.left ? 1 : 0}px minmax(0, 1fr) ${right ? 1 : 0}px ${right ? `min(${rightW}px, 70vw)` : "0px"}` }}>
+      <div className="workspace main" style={{ gridTemplateColumns: `${panels.left ? leftW : 0}px ${panels.left ? 1 : 0}px minmax(0, 1fr) ${showRight ? 1 : 0}px ${showRight ? `min(${rightW}px, 70vw)` : "0px"}` }}>
         <div className="panel" style={panels.left ? undefined : { visibility: "hidden", overflow: "hidden" }}><div className="panel-head">Palette</div><div className="panel-body"><Palette /></div></div>
         <div className="splitter-v" onPointerDown={dragLeft} role="separator" aria-orientation="vertical" style={panels.left ? undefined : { visibility: "hidden", overflow: "hidden" }} />
-        <div className="workspace" style={{ gridTemplateRows: `minmax(0, 1fr) 1px ${dockH}px`, minWidth: 0 }}>
+        <div className="workspace" style={{ gridTemplateRows: `minmax(0, 1fr) 1px ${showDock ? `${dockH}px` : "33px"}`, minWidth: 0 }}>
           <div className="panel" style={{ background: "var(--paper)" }}>
-            <div className="tabs" role="tablist">
+            {expert && <div className="tabs" role="tablist">
               <button className={`tab${s.view === "network" ? " on" : ""}`} onClick={() => s.setView("network")} role="tab">Network</button>
               {expert && <button className={`tab${s.view === "automaton" ? " on" : ""}`} onClick={() => s.setView("automaton")} role="tab">
                 Automaton{s.focus ? <span className="count">{s.focus} · {focusAut}</span> : null}</button>}
@@ -334,27 +390,31 @@ export default function App() {
               {expert && <span className="xs muted tab-info" style={{ alignSelf: "center", paddingRight: 10 }}>
                 {s.project.meta.protocol.name} · backend {s.project.simulation.backend} · seed {s.sim?.seed ?? s.project.simulation.seed}
               </span>}
-            </div>
+            </div>}
             <div style={{ position: "relative", flex: 1, minHeight: 0, display: "flex" }}>
-              {s.view === "network" && <NetworkCanvas />}
-              {s.view === "automaton" && <AutomatonCanvas />}
-              {s.view === "spacetime" && <Geometry />}
+              {view === "network" && <NetworkCanvas />}
+              {view === "automaton" && <AutomatonCanvas />}
+              {view === "spacetime" && <Geometry />}
             </div>
           </div>
-          <div className="splitter-h" onPointerDown={dragDock} role="separator" aria-orientation="horizontal" />
+          <div className="splitter-h" onPointerDown={showDock ? dragDock : undefined} role="separator" aria-orientation="horizontal" />
           <div className="panel">
             <div className="tabs" role="tablist">
               {DOCK_TABS.filter(([k]) => expert || SIMPLE_TABS.includes(k)).map(([k, label]) => (
-                <button key={k} role="tab" className={`tab${dock === k ? " on" : ""}`} onClick={() => s.setDock(k)} data-testid={`dock-${k}`}>
-                  {label}
+                <button key={k} role="tab" className={`tab${showDock && dock === k ? " on" : ""}`}
+                  onClick={() => { s.setDock(k); setDockOpen(true); }} data-testid={`dock-${k}`}>
+                  {expert ? label : ({ decision: "Why this result", compare: "Theory check", timing: "Timing" } as Record<string, string>)[k] ?? label}
                   {k === "events" && s.sim && <span className="count">{s.sim.trace_length}</span>}
                   {k === "validation" && (errors + warnings > 0) && <span className="count" style={{ color: errors ? "var(--reject)" : "var(--warn)" }}>{errors ? `${errors} errors` : `${warnings} warnings`}</span>}
                   {k === "decision" && s.sim && <span className="count">{s.sim.decision.outcome}</span>}
                   {k === "timing" && !!s.analysis?.timing.issues.length && <span className="count" style={{ color: "var(--warn)" }}>{s.analysis.timing.issues.length}</span>}
                 </button>
               ))}
+              {!expert && <><span className="spacer" />
+                <button className="btn ghost dock-toggle" aria-expanded={showDock} onClick={() => setDockOpen((v) => !v)}
+                  title={showDock ? "Fold the details away" : "Show the details"}>{showDock ? "Hide details" : "Show details"}</button></>}
             </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
+            <div style={{ flex: 1, minHeight: 0 }} hidden={!showDock}>
               {dock === "events" && <EventLog />}
               {dock === "timeline" && <Timeline />}
               {dock === "timing" && <TimingPanel />}
@@ -366,10 +426,10 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div className="splitter-v" onPointerDown={dragRight} role="separator" aria-orientation="vertical" style={right ? undefined : { visibility: "hidden" }} />
-        <div className="panel" style={right ? undefined : { visibility: "hidden", overflow: "hidden" }}>
+        <div className="splitter-v" onPointerDown={dragRight} role="separator" aria-orientation="vertical" style={showRight ? undefined : { visibility: "hidden" }} />
+        <div className="panel story-panel" style={showRight ? undefined : { visibility: "hidden", overflow: "hidden" }}>
           <div className="tabs" role="tablist">
-            <button role="tab" className={`tab${details ? "" : " on"}`} onClick={() => { setDetails(false); s.select({ kind: "project" }); }} data-testid="tab-play">Play</button>
+            <button role="tab" className={`tab${details ? "" : " on"}`} onClick={() => { setDetails(false); s.select({ kind: "project" }); }} data-testid="tab-play">Scenario</button>
             <button role="tab" className={`tab${details ? " on" : ""}`} onClick={() => setDetails(true)} data-testid="tab-details">Details</button>
             <span className="spacer" />
             {details && s.selection.kind !== "project" && <button className="btn ghost" onClick={() => s.select({ kind: "project" })}>Project</button>}

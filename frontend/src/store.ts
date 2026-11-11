@@ -169,7 +169,7 @@ export const useStore = create<Store>((set, get) => {
 
   return {
     meta: null, project: null, revision: 0, issues: [], ports: {}, verifierTypes: {}, analysis: null, scenarios: null, simError: null, sim: null,
-    selection: { kind: "project" }, view: "network", focus: null, dock: "events",
+    selection: { kind: "project" }, view: storageGet("qpv.expert") === "1" ? "network" : "spacetime", focus: null, dock: "decision",
     past: [], future: [], playing: false, playRate: 4, busy: false, dirtyPush: false, toast: null,
     linkKind: "quantum", consoleLog: [], highlightChain: [], theme: "light",
     showAttacks: storageGet(ATTACKS_KEY) === "1",

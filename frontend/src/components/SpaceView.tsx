@@ -15,7 +15,7 @@ const PRESETS: Record<string, [number, number]> = { top: [0, 90], front: [0, 0],
 
 type GeoMode = "spacetime" | "map" | "3d";
 const MODES: [GeoMode, string, string][] = [
-  ["spacetime", "Spacetime (x–t)", "Position along x against time: challenges, answers and light cones"],
+  ["spacetime", "Timeline", "Position along x against time: challenges, answers and light cones"],
   ["map", "Map", "Top-down view with the light-cone check"],
   ["3d", "3D", "Orthographic view you can rotate"],
 ];

@@ -4,6 +4,10 @@ import type { DemoInfo, Recipe, SiteInfo } from "../types";
 import { copyText, recipeLink, scenarioLink } from "../links";
 import { myRecipes, saveMyRecipes } from "./ScenarioDialog";
 
+/** Short chip names for the gallery's sections (the full names head each section). */
+const SHORT: Record<string, string> = { A: "Basics", B: "Real world", C: "No entanglement", D: "Entanglement", E: "Identity",
+  F: "Loss & leaks", G: "Beyond BB84", "★": "Mine" };
+
 type Entry = { key: string; title: string; who?: string; expect?: string; recipe: Recipe; demo?: string; section: string };
 
 function Row({ e, current, onRun, onEdit, onDelete }: {
@@ -53,7 +57,7 @@ export function ScenarioList({ onPicked, onEdit, compact }: { onPicked: () => vo
         <div className="chips" role="radiogroup" aria-label="Section">
           {[["", "All"], ...Object.keys(sections).map((k) => [k, k])].map(([k, label]) => (
             <button key={k || "all"} role="radio" aria-checked={only === k} className={`chip${only === k ? " on" : ""}`}
-              title={k ? sections[k] : "All sections"} onClick={() => setOnly(k)}>{label}</button>
+              title={k ? sections[k] : "All sections"} onClick={() => setOnly(k)}>{k ? SHORT[k] ?? label : label}</button>
           ))}
         </div>
       </div>

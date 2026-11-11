@@ -77,6 +77,55 @@ def explain(sim: "Simulation", vid: str, entry: Dict[str, Any]) -> Tuple[str, Li
     return f"Rejected: no answer was sent to {vid} before its deadline{when}.", refs
 
 
+def _short(fs: int) -> str:
+    fs = abs(int(fs))
+    if fs < tu.PS:
+        return f"{fs} fs"
+    ns = fs / tu.NS
+    if ns < 1:
+        return f"{ns * 1000:.0f} ps"
+    if ns < 1000:
+        return f"{ns:.2f} ns".replace(".00 ns", " ns")
+    return f"{ns / 1000:.2f} µs"
+
+
+def plain(sim: "Simulation", vid: str, entry: Dict[str, Any]) -> str:
+    """The verdict in everyday words, without code or internal names."""
+    node = sim.nodes[vid]
+    if entry["status"] == "error":
+        return f"{vid} broke down and could not judge the round."
+    if entry["verdict"] is None:
+        return f"{vid} never reported a verdict." if node.finished else f"{vid} is still waiting."
+    vd = node.verdict
+    reason = str(vd.get("reason") or "")
+    if "faulty verifier" in reason:
+        return f"{vid} {'accepted' if vd['outcome'] == 'accept' else 'rejected'} without checking: it is faulty."
+    if node.observations.get("lost"):
+        return f"{vid} was told that no photon arrived, so the round counts as lost."
+    deadline = next((r.data["fire_fs"] for r in reversed(sim.trace)
+                     if r.node == vid and r.kind == "timer.set" and r.data["name"] == "deadline"), None)
+    consumed = [sim.messages[m] for m in entry.get("consumed", []) if m in sim.messages]
+    if consumed:
+        m = consumed[0]
+        if vd["outcome"] == "accept":
+            spare = f", {_short(deadline - m.arrival_time)} before its deadline" if deadline is not None else ""
+            return f"{vid} got the right answer in time{spare}."
+        if deadline is not None and m.arrival_time > deadline:
+            return f"{vid} got an answer {_short(m.arrival_time - deadline)} too late."
+        exp = node.vars.get("expected", node.vars.get("x"))
+        if isinstance(exp, list) and isinstance(m.value, list) and len(exp) == 2:
+            return (f"{vid} got the right bit but the wrong key." if m.value[0] == exp[0] and m.value[1:] != exp[1:]
+                    else f"{vid} got a wrong answer and the wrong key.")
+        return f"{vid} got a wrong answer ({m.value!r} instead of {exp!r})."
+    late = sorted((m for m in sim.messages.values() if m.dst == vid and m.depart_time is not None
+                   and m.status != "lost"), key=lambda m: m.depart_time + m.delay_fs)
+    if late and deadline is not None and late[0].depart_time + late[0].delay_fs > deadline:
+        return f"{vid}'s answer would arrive {_short(late[0].depart_time + late[0].delay_fs - deadline)} after its deadline."
+    if any(m.status == "lost" and m.kind == "quantum" for m in sim.messages.values()):
+        return f"{vid} received no answer before its deadline: the photon was lost on the way."
+    return f"{vid} received no answer before its deadline."
+
+
 def decide(sim: "Simulation") -> Dict[str, Any]:
     ver = sim.project["verification"]
     rule = ver.get("rule", "all")
@@ -126,6 +175,7 @@ def decide(sim: "Simulation") -> Dict[str, Any]:
             lines.append(f"{vid} has not reached a verdict (state '{node.state}')")
         entry["category"] = classify_reason(entry)
         entry["sentence"], entry["refs"] = explain(sim, vid, entry)
+        entry["plain"] = plain(sim, vid, entry)
         per.append(entry)
     accepts = sum(1 for e in per if e["verdict"] == "accept")
     n = len(per)
