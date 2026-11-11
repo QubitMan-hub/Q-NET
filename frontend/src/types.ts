@@ -39,7 +39,8 @@ export interface ExperimentSpec {
 export interface Project {
   format: string; version: number;
   meta: { name: string; description: string; protocol: { name: string; version: string; references: string[] };
-    assumptions: string[]; limitations: string[]; demo?: DemoInfo; recipe?: Recipe };
+    assumptions: string[]; limitations: string[]; demo?: DemoInfo; recipe?: Recipe; site?: SiteInfo;
+    qpv?: { protocol: string; [k: string]: any } };
   physics: { signal_speed_mps: number; allow_superluminal: boolean };
   simulation: { seed: number; backend: string; max_time_ns: number; max_events: number; stop_when: string; priorities: Record<string, number> };
   claim: { prover: string | null; position: number[] };
@@ -59,7 +60,7 @@ export interface TimingRow {
 }
 export interface Reference { value: number; label: string; source: string }
 export interface Analysis {
-  dimension: number; qpv: boolean; timing: { rows: TimingRow[]; issues: string[] };
+  dimension: number; qpv: boolean; timing: { rows: TimingRow[]; issues: string[] }; protocol?: string; site?: SiteInfo | null;
   references: Record<string, Reference>; default_tau_ns: number;
 }
 export interface ReadyScenario { id: string; label: string; args: Record<string, any> }
@@ -77,9 +78,19 @@ export interface RecipeField {
   type: "number" | "bool" | "choice" | "party" | "verifier"; label: string; default: any;
   choices?: (string | number)[]; allow_all?: boolean; dims?: number;
 }
+export interface ProtocolInfo { label: string; answerers: string[] }
 export interface RecipeSchema {
   base: Record<string, RecipeField>; twists: Record<string, { label: string; fields: Record<string, RecipeField> }>;
   strategies: Record<string, string>; answerers: Record<string, string>;
+  protocols: Record<string, ProtocolInfo>; sites: Record<string, string>;
+}
+export interface ComparisonCell { recipe: Recipe; who: string }
+export interface Comparison {
+  columns: { id: string; label: string }[]; rows: { label: string; cells: Record<string, ComparisonCell | null> }[]; note: string;
+}
+export interface SiteInfo {
+  name: string; label: string; claim_latlon: number[]; verifiers_latlon: number[][]; distance_m: number;
+  precision_m: number; fibre_gain_ns: number; tolerance_ns: number; photon_loss: number | null; hardware?: Record<string, any>;
 }
 export interface DemoEntry {
   id: string; section: string; title: string; expect: string; watch: string; who?: string;
@@ -98,6 +109,7 @@ export interface ReportRow {
 export interface TheoryResult { answerer: string; label: string; values: number[]; theory: (number | null)[]; note: string }
 export interface ScenarioCatalog {
   ready: ReadyScenario[]; demos: { sections: Record<string, string>; demos: DemoEntry[] }; recipe: RecipeSchema;
+  protocols: Record<string, ProtocolInfo>; comparison: Comparison;
   answerers: Record<string, string>; provers: string[]; attacks: string[];
   policies: string[]; combines: string[]; presets: Record<string, { label: string; unit: string; range?: number[]; values?: string[] }>;
 }

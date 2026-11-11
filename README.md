@@ -21,7 +21,7 @@ qpv serve --open
 
 ## Scenarios
 
-The workbench ships a gallery of 47 ready-made scenarios: honest provers, cheaters with and without entanglement,
+The workbench ships a gallery of 62 ready-made scenarios: honest provers, cheaters with and without entanglement,
 noise, lost photons, weak lasers, false clicks, a walking prover, clock errors, fibre, someone in the middle, keyed answers,
 leaked secrets, and a four-basis protocol that stands up to selective 'no photon' answers. In the workbench click
 **Scenarios**; from the command line:
@@ -56,6 +56,19 @@ One simulation run is one protocol round. A *Judge over many rounds* twist sets 
 that must be answered and the fraction of answers that must be right. The workbench gives the exact chance of passing
 from the measured per-round rates. `qpv rounds --honest 0.98 --cheat 0.854` finds the fewest rounds that separate an
 honest prover from a cheater.
+
+### More protocols, real sites, faulty verifiers
+
+- **Protocols** (pick one in the builder): BB84; a *qudit* of 2, 4 or 8 levels in d + 1 mutually unbiased bases
+  (d = 2 is the six-state protocol); *QPV_BB84^f*, where the basis is f(x, y) of two n-bit strings, with a budget
+  attack that needs one EPR pair per possible x; and *classical* position verification as a baseline that colluders
+  always beat. **Compare protocols...** in the Scenarios dialog (or `qpv protocols`) runs every protocol against
+  guessing, unentangled and entangled cheaters side by side.
+- **Real sites**: verifiers at real coordinates (an optical table, a campus with free-space links, a city over street
+  fibre) with detector efficiency, false clicks and jitter. The scenario card shows the location precision and the
+  photon loss; over city fibre an impostor kilometres away still passes.
+- **Faulty verifiers**: a verifier can be offline, accept everything or reject everything, and the rule can require
+  k of n verifiers. Gallery section G shows the trade-off.
 
 ### New twists
 

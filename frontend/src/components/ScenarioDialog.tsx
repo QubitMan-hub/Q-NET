@@ -97,6 +97,7 @@ export function ScenarioDialog({ onClose, initial }: { onClose: () => void; init
     setAdding("");
   };
   const dim = Number(r.base.dim ?? 2);
+  const protocol: string = r.base.protocol ?? "bb84";
   const claim: number[] = r.base.claim ?? [0, 0, 0];
   const go = async (run: boolean) => { onClose(); await useStore.getState().loadRecipe(r, run); };
   const save = () => {
@@ -131,12 +132,26 @@ export function ScenarioDialog({ onClose, initial }: { onClose: () => void; init
               onCommit={(v) => base("claim", [0, 1, 2].map((j) => (j === i ? v ?? 0 : claim[j] ?? 0)).slice(0, Math.max(2, dim)))} />)}
           </div>
         </Field>
+        <Field label="Protocol" title="Which position-verification protocol the verifiers run.">
+          <Select value={protocol} ariaLabel="Protocol"
+            onChange={(v) => setR({ ...r, base: { ...r.base, protocol: v, who: "honest", ...(v === "bb84f" ? { dim: 1 } : {}) } })}
+            options={Object.entries(schema.protocols).map(([value, p]) => ({ value, label: p.label }))} />
+        </Field>
+        {protocol === "qudit" && <FieldInput f={schema.base.qudit_d} label={schema.base.qudit_d.label} value={r.base.qudit_d} recipe={r}
+          onChange={(v) => base("qudit_d", v)} />}
+        {protocol === "bb84f" && (["f", "f_bits", "pairs"] as const).map((k) => (
+          <FieldInput key={k} f={schema.base[k]} label={schema.base[k].label} value={r.base[k]} recipe={r} onChange={(v) => base(k, v)} />
+        ))}
         <Field label="Who answers" title={GLOSSARY.attack}>
           <Select value={r.base.who ?? "honest"} ariaLabel="Who answers" onChange={(v) => base("who", v)}
-            options={Object.entries(schema.answerers).map(([value, label]) => ({ value, label }))} />
+            options={(schema.protocols[protocol]?.answerers ?? Object.keys(schema.answerers)).map((value) => ({ value, label: schema.answerers[value] ?? value }))} />
+        </Field>
+        <Field label="Real site" title="Place the verifiers at real coordinates with real links and detectors (2D, 3 verifiers).">
+          <Select value={r.base.site ?? "none"} ariaLabel="Real site" onChange={(v) => base("site", v === "none" ? undefined : v)}
+            options={[{ value: "none", label: "None (regular layout)" }, ...Object.entries(schema.sites).map(([value, label]) => ({ value, label }))]} />
         </Field>
         <Advanced>
-          {(["tolerance_ns", "policy", "combine", "bases"] as const).filter((k) => schema.base[k]).map((k) => (
+          {(protocol === "bb84" ? ["tolerance_ns", "policy", "combine", "bases"] as const : ["tolerance_ns"] as const).filter((k) => schema.base[k]).map((k) => (
             <FieldInput key={k} f={schema.base[k]} label={schema.base[k].label} value={r.base[k]} recipe={r} onChange={(v) => base(k, v)} />
           ))}
         </Advanced>

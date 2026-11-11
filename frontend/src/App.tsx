@@ -15,6 +15,7 @@ import { PlayPanel, answering } from "./components/PlayPanel";
 import { Presenter } from "./components/Presenter";
 import { ReportDialog } from "./components/ReportDialog";
 import { ChartDialog } from "./components/ChartDialog";
+import { CompareDialog } from "./components/CompareDialog";
 import { presentFromHash, recipeFromHash } from "./links";
 import { Brand, Icon } from "./components/ui";
 import { deleteSelection, duplicateParticipant, addState } from "./editing";
@@ -214,6 +215,7 @@ export default function App() {
   const [welcome, setWelcome] = useState(() => storageGet(WELCOME_KEY) !== "1" && !scenarioFromHash() && !recipeFromHash() && !presentFromHash());
   const [report, setReport] = useState(false);
   const [chart, setChart] = useState(false);
+  const [compare, setCompare] = useState(false);
   const [builder, setBuilder] = useState<false | { initial: Recipe | null }>(false);
   const [demos, setDemos] = useState(false);
   const [expert, setExpert] = useState(() => storageGet(EXPERT_KEY) === "1");
@@ -325,7 +327,8 @@ export default function App() {
                 <select className="select attack-switch" value={answering(s.project)} aria-label="Who answers at the claim" data-testid="attack-switch"
                   disabled={!s.analysis?.qpv} onChange={(e) => s.switchAttack(e.target.value)}>
                   {!answering(s.project) && <option value="">—</option>}
-                  {Object.entries(s.scenarios?.answerers ?? {}).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  {(s.scenarios?.protocols[s.analysis?.protocol ?? "bb84"]?.answerers ?? Object.keys(s.scenarios?.answerers ?? {}))
+                    .map((k) => <option key={k} value={k}>{s.scenarios?.answerers[k] ?? k}</option>)}
                 </select>
               </label>}
               {expert && <span className="xs muted tab-info" style={{ alignSelf: "center", paddingRight: 10 }}>
@@ -377,7 +380,8 @@ export default function App() {
       </div>
       {welcome && <StartScreen onClose={closeWelcome} onBuild={() => setBuilder({ initial: null })} onDemos={() => setDemos(true)}
         onEdit={(r) => setBuilder({ initial: r })} />}
-      {demos && <DemoDialog onClose={() => setDemos(false)} onEdit={(r) => setBuilder({ initial: r })} onReport={() => setReport(true)} />}
+      {demos && <DemoDialog onClose={() => setDemos(false)} onEdit={(r) => setBuilder({ initial: r })} onReport={() => setReport(true)} onCompare={() => setCompare(true)} />}
+      {compare && <CompareDialog onClose={() => setCompare(false)} />}
       {report && <ReportDialog onClose={() => setReport(false)} />}
       {chart && <ChartDialog onClose={() => setChart(false)} />}
       {builder && <ScenarioDialog initial={builder.initial} onClose={() => setBuilder(false)} />}

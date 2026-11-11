@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../store";
-import type { DemoInfo, Recipe } from "../types";
+import type { DemoInfo, Recipe, SiteInfo } from "../types";
 import { copyText, recipeLink, scenarioLink } from "../links";
 import { myRecipes, saveMyRecipes } from "./ScenarioDialog";
 
@@ -79,7 +79,9 @@ export function ScenarioList({ onPicked, onEdit, compact }: { onPicked: () => vo
 }
 
 /** The scenario gallery as a dialog. */
-export function DemoDialog({ onClose, onEdit, onReport }: { onClose: () => void; onEdit: (r: Recipe) => void; onReport: () => void }) {
+export function DemoDialog({ onClose, onEdit, onReport, onCompare }: {
+  onClose: () => void; onEdit: (r: Recipe) => void; onReport: () => void; onCompare: () => void;
+}) {
   const n = useStore((s) => s.scenarios?.demos.demos.length ?? 0);
   const sections = useStore((s) => s.scenarios?.demos.sections ?? {});
   const [show, setShow] = useState("all");
@@ -105,6 +107,8 @@ export function DemoDialog({ onClose, onEdit, onReport }: { onClose: () => void;
             </select>
             <button className="btn" onClick={present} data-testid="btn-present" title="Show the scenarios one by one, full screen">Present</button>
           </span>
+          <button className="btn" onClick={() => { onClose(); onCompare(); }} data-testid="btn-compare"
+            title="Every protocol against every kind of cheater, side by side">Compare protocols…</button>
           <button className="btn" onClick={() => { onClose(); onReport(); }} data-testid="btn-report"
             title="Run every scenario and save a table of measured against expected pass rates">Report…</button>
           <span className="grow" />
@@ -116,8 +120,8 @@ export function DemoDialog({ onClose, onEdit, onReport }: { onClose: () => void;
 }
 
 /** Shown in the Play panel while a recipe-built scenario is loaded: what it is, what to watch, what to expect. */
-export function DemoCard({ demo, recipe, onBrowse, onEdit, onChart }: {
-  demo: DemoInfo; recipe?: Recipe; onBrowse: () => void; onEdit?: () => void; onChart?: () => void;
+export function DemoCard({ demo, recipe, site, onBrowse, onEdit, onChart }: {
+  demo: DemoInfo; recipe?: Recipe; site?: SiteInfo; onBrowse: () => void; onEdit?: () => void; onChart?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   // a gallery scenario gets a short link; anything else carries its whole recipe in the link
@@ -135,11 +139,32 @@ export function DemoCard({ demo, recipe, onBrowse, onEdit, onChart }: {
       </div>
       {demo.watch && <p>{demo.watch}</p>}
       {demo.expect && <p className="demo-expect-line"><b>Expected:</b> {demo.expect}</p>}
+      {site && <SiteFacts site={site} />}
       <div className="row demo-actions">
         {onEdit && <button className="btn ghost" onClick={onEdit} data-testid="demo-edit">Change it…</button>}
         {link && <button className="btn ghost" onClick={copy} title={link} data-testid="demo-copy-link">{copied ? "Link copied" : "Copy link"}</button>}
         {onChart && <button className="btn ghost" onClick={onChart} data-testid="demo-chart">Chart…</button>}
         <button className="btn ghost" onClick={onBrowse}>All scenarios…</button>
+      </div>
+    </div>
+  );
+}
+
+const fmtM = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : m >= 1 ? `${m.toFixed(1)} m` : `${(100 * m).toFixed(1)} cm`);
+
+/** The real-world numbers of a site: where, how far, how precise, how lossy. */
+export function SiteFacts({ site }: { site: SiteInfo }) {
+  const [lat, lon] = site.claim_latlon;
+  const hw = site.hardware ?? {};
+  return (
+    <div className="site-facts" data-testid="site-facts">
+      <div><span className="muted">Claim at</span> {lat.toFixed(5)}°N, {lon.toFixed(5)}°E ·{" "}
+        <a href={`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=15/${lat}/${lon}`} target="_blank" rel="noreferrer">map</a></div>
+      <div className="site-grid">
+        <span><b>{fmtM(site.distance_m)}</b><i>verifier distance</i></span>
+        <span><b>±{fmtM(site.precision_m)}</b><i>location precision</i></span>
+        <span><b>{site.photon_loss === null ? "—" : `${Math.round(100 * site.photon_loss)}%`}</b><i>photons lost</i></span>
+        <span><b>{hw.links === "fibre" ? `fibre ×${hw.route_factor}` : "free space"}</b><i>honest links</i></span>
       </div>
     </div>
   );

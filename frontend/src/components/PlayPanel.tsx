@@ -8,7 +8,10 @@ import { describeChance, testRule } from "../links";
 /** Who currently answers at the claim, in the engine's scenario vocabulary. */
 export function answering(p: Project): string {
   const autos = p.participants.filter((q) => q.role !== "verifier").map((q) => q.automaton).join(" ");
-  if (autos.includes("qpv_adv_chain")) return "teleport";
+  if (autos.includes("qpv_adv_chain") || autos.includes("qpv_adv_teleport_qudit")) return "teleport";
+  if (autos.includes("qpv_adv_budget")) return "budget";
+  if (autos.includes("qpv_adv_linear")) return "linear";
+  if (autos.includes("qpv_adv_relay")) return "relay";
   if (autos.includes("qpv_adv_unentangled")) return "unentangled";
   if (autos.includes("qpv_adv_guess")) return "guess";
   const prover = p.participants.find((q) => q.id === p.claim.prover);
@@ -23,6 +26,9 @@ const WHO: Record<string, [string, string]> = {
   unentangled: ["Cheaters, no entanglement", "Surround the spot and share what they measure. Win about 85% of rounds."],
   teleport: ["Cheaters with entanglement", "Share EPR pairs and teleport the qubit. Beat XOR-based verifiers every time."],
   guess: ["Wild guessers", "Guess the basis and the answer. Rarely win."],
+  budget: ["Cheaters with an entanglement budget", "Teleport into the pair named by x. Need a pair for every possible x to always win."],
+  linear: ["Cheaters with one EPR pair", "Beat f = xor of parities with a single shared pair."],
+  relay: ["Colluders relaying bits", "Forward each verifier's bit at light speed. Beat classical checks every time."],
 };
 
 const cheating = (who: string) => !["honest", "displaced"].includes(who);
@@ -55,6 +61,8 @@ export function PlayPanel({ onDetails, onDemos, onEdit, onChart }: {
   const demo = project.meta.demo;
   const who = demo ? (demo.who === "honest" ? "honest" : "cheat") : answering(project);
   const dim = analysis?.qpv ? analysis.dimension : 0;
+  const protocol = analysis?.protocol ?? "bb84";
+  const protoWho = protocol !== "bb84" ? useStore.getState().scenarios?.protocols[protocol]?.answerers : undefined;
 
   const act = async (fn: () => Promise<void>) => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
   const build = (d: number, w: string) => act(async () => {
@@ -89,7 +97,7 @@ export function PlayPanel({ onDetails, onDemos, onEdit, onChart }: {
 
   return (
     <div className="play" data-testid="play-panel">
-      {demo ? <DemoCard demo={demo} recipe={project.meta.recipe} onBrowse={onDemos} onChart={analysis?.qpv ? onChart : undefined}
+      {demo ? <DemoCard demo={demo} recipe={project.meta.recipe} site={project.meta.site} onBrowse={onDemos} onChart={analysis?.qpv ? onChart : undefined}
           onEdit={project.meta.recipe ? () => onEdit(project.meta.recipe!) : undefined} />
         : <p className="play-intro">The verifiers time their signals to meet at one spot. Only someone really there can answer every verifier in time, unless cheaters team up.</p>}
       {!demo && <div className="row">
@@ -101,7 +109,7 @@ export function PlayPanel({ onDetails, onDemos, onEdit, onChart }: {
       <div className="play-worlds" role="radiogroup" aria-label="World">
         {WORLDS.map(([d, name, sub]) => (
           <button key={d} role="radio" aria-checked={dim === d} className={`play-world${dim === d ? " on" : ""}`} disabled={busy}
-            onClick={() => build(d, who || "honest")} data-testid={`play-dim-${d}`}>
+            onClick={() => build(d, !who || ["budget", "linear", "relay", "cheat"].includes(who) ? "honest" : who)} data-testid={`play-dim-${d}`}>
             <b>{d}D {name}</b><span>{sub}</span>
           </button>
         ))}
@@ -109,7 +117,8 @@ export function PlayPanel({ onDetails, onDemos, onEdit, onChart }: {
 
       <h3><span className="play-step">2</span>Who stands at the spot?</h3>
       <div className="play-who" role="radiogroup" aria-label="Who answers">
-        {Object.entries(WHO).filter(([k]) => showAttacks || !cheating(k) || k === who).map(([k, [name, desc]]) => (
+        {Object.entries(WHO).filter(([k]) => (protoWho ? protoWho.includes(k) : !["budget", "linear", "relay"].includes(k))
+          && (showAttacks || !cheating(k) || k === who)).map(([k, [name, desc]]) => (
           <button key={k} role="radio" aria-checked={who === k} className={`play-card ${cheating(k) ? "cheat" : "true"}${who === k ? " on" : ""}`}
             disabled={busy} onClick={() => pickWho(k)} data-testid={`play-who-${k}`}>
             <b>{name}</b><span>{desc}</span>

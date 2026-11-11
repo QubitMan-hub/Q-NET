@@ -688,3 +688,17 @@ svg .tick { font-family: var(--font-code); font-size: 10px; fill: var(--ink-3); 
 .demo-dialog-actions { flex-wrap: wrap; }
 .present-pick { display: inline-flex; gap: 4px; align-items: center; }
 .present-pick .select { width: auto; max-width: 220px; }
+
+/* ------------------------------------------------------------ protocol comparison, real sites */
+.dialog.compare { width: min(900px, calc(100vw - 32px)); }
+.compare-grid td.cmp { text-align: center; }
+.compare-grid td.cmp.high { background: var(--adversary-soft); }
+.compare-grid td.cmp.mid { background: var(--classical-soft); }
+.compare-grid td.cmp.low { background: var(--prover-soft); }
+.cmp-cell { border: none; background: none; cursor: pointer; padding: 2px 4px; font: inherit; color: inherit; }
+.cmp-cell:hover { text-decoration: underline; text-underline-offset: 3px; }
+.site-facts { font-size: var(--fs-s); display: flex; flex-direction: column; gap: 6px; padding-top: 4px; border-top: 1px solid var(--rule); }
+.site-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.site-grid span { display: flex; flex-direction: column; }
+.site-grid b { font-size: var(--fs-m); }
+.site-grid i { font-style: normal; color: var(--ink-3); font-size: var(--fs-xs); }

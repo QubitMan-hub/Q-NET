@@ -142,7 +142,8 @@ def theory(project: Dict[str, Any], name: str, values: List[Any]) -> Dict[str, A
                 return (1 - v) ** k * base_v if proto != "classical" else base_v
             return None
         pts = [g(v) for v in values]
-        return {"answerer": who, "label": LABELS.get(who, who), "values": values, "theory": pts,
+        from .protocols import LABELS as PLABELS
+        return {"answerer": who, "label": LABELS.get(who) or PLABELS.get(who, who), "values": values, "theory": pts,
                 "note": "Theory assumes the rest of the setup is ideal: no other noise, loss or timing error."
                 if any(p is not None for p in pts) else "No simple formula for this combination."}
     m = bases_of(project) if who else 2

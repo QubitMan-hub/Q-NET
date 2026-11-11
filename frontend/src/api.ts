@@ -107,6 +107,9 @@ export const api = {
   attack: (attack: string, policy?: string) => req<ProjectResponse>("POST", "/api/qpv/attack", { attack, policy }),
   autowire: () => req<ProjectResponse>("POST", "/api/qpv/autowire"),
   lightPoint: (point: number[], tau_ns?: number) => req<LightPoint>("POST", "/api/qpv/lightcone", { point, tau_ns }),
+  compare: (recipe: unknown, rounds: number) =>
+    req<{ n: number; accepted: number; p: number; lo: number; hi: number; theory: number | null; source: string }>(
+      "POST", "/api/qpv/compare", { recipe, rounds }),
   theory: (preset: string, values: number[]) => req<TheoryResult>("POST", "/api/qpv/theory", { preset, values }),
   reportRow: (id: string, rounds: number, seed?: number) => req<ReportRow>("POST", "/api/qpv/report", { id, rounds, seed }),
   reportRender: async (rows: ReportRow[], format: "md" | "csv" | "html") => {
